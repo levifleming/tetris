@@ -138,6 +138,8 @@ void drawTitle(bool isSave);
 void drawOptions();
 void drawControls();
 void drawGameOver();
+bool checkDown();
+void updateMatrix();
 
 tetrimo currentTetrimo;
 
@@ -158,6 +160,8 @@ int block_flg;
 bool gameOver;
 int score;
 
+int is2Player;
+
 Color next_tetrimo;
 Color held_tetrimo;
 bool heldExists;
@@ -175,9 +179,9 @@ int main(int argc, char *argv[]) {
     getmaxyx(stdscr, max_y, max_x);
 
     START:
-    int numOptions = 3;
+    int numOptions = 4;
     if(!fopen("save.txt", "r")){
-        numOptions = 2;
+        numOptions = 3;
         drawTitle(FALSE);
     } else {
         drawTitle(TRUE);
@@ -212,7 +216,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    if(numOptions == 2) {
+    if(numOptions == 3) {
         switch (option)
         {
         case 1:
@@ -220,6 +224,9 @@ int main(int argc, char *argv[]) {
             break;
         case 2:
             option = 3;
+            break;
+        case 3:
+            option = 4;
             break;
         default:
             break;
@@ -243,6 +250,9 @@ int main(int argc, char *argv[]) {
             load();
             break;
         case 2:
+            is2Player = 30;
+            break;
+        case 3:
             clear();
             drawOptions();
             bool options_flg;
@@ -251,7 +261,7 @@ int main(int argc, char *argv[]) {
                 switch (wgetch(stdscr))
                 {
                 case KEY_LEFT:
-                    if(new_level != 0) {
+                    if(new_level != 1) {
                         new_level--;
                         mvprintw(13, 26, "Level: %d", new_level);
                     }
@@ -280,7 +290,7 @@ int main(int argc, char *argv[]) {
             clear();
             goto START;
             break;
-        case 3:
+        case 4:
             clear();
             drawControls();
             while(wgetch(stdscr)!= ESC_KEY) {}
@@ -409,11 +419,13 @@ void drawTitle(bool isSave) {
     mvprintw(13, 26, "NEW GAME");
     if(isSave) {
         mvprintw(15, 26, "CONTINUE");
+        mvprintw(17, 26, "2-PLAYER");
+        mvprintw(19, 26, "OPTIONS");
+        mvprintw(21, 26, "CONTROLS");
+    } else {
+        mvprintw(15, 23, "LOCAL 2 PLAYER");
         mvprintw(17, 26, "OPTIONS");
         mvprintw(19, 26, "CONTROLS");
-    } else {
-        mvprintw(15, 26, "OPTIONS");
-        mvprintw(17, 26, "CONTROLS");
     }
     
     
@@ -1211,7 +1223,6 @@ void shift(Orientation o) {
                 currentTetrimo.next_xy[i].x = currentTetrimo.current_xy[i].x;
                 currentTetrimo.next_xy[i].y = currentTetrimo.current_xy[i].y;
                 if(currentTetrimo.current_xy[i].y==0) {
-                    mvprintw(1,1,"x");
                     gameOver = TRUE;
                 }
             }
