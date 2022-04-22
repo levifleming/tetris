@@ -134,9 +134,10 @@ void save();
 void load();
 void drawHeld(Color c);
 void eraseHeld(Color c);
-void drawTitle();
+void drawTitle(bool isSave);
 void drawOptions();
 void drawControls();
+void drawGameOver();
 
 tetrimo currentTetrimo;
 
@@ -154,6 +155,7 @@ int pause_flg;
 int toggle_flg;
 int block_flg;
 
+bool gameOver;
 int score;
 
 Color next_tetrimo;
@@ -173,7 +175,14 @@ int main(int argc, char *argv[]) {
     getmaxyx(stdscr, max_y, max_x);
 
     START:
-    drawTitle();
+    int numOptions = 3;
+    if(!fopen("save.txt", "r")){
+        numOptions = 2;
+        drawTitle(FALSE);
+    } else {
+        drawTitle(TRUE);
+    }
+    
 
     int option = 0;
     int arrow_pos = 13;
@@ -189,7 +198,7 @@ int main(int argc, char *argv[]) {
                 }
                 break;
             case KEY_DOWN:
-                if(option != 3) {
+                if(option != numOptions) {
                     option++;
                     mvprintw(arrow_pos, 23, "  ");
                     arrow_pos += 2;
@@ -200,6 +209,20 @@ int main(int argc, char *argv[]) {
                 title_flg = TRUE;
             default:
                 break;
+        }
+    }
+
+    if(numOptions == 2) {
+        switch (option)
+        {
+        case 1:
+            option = 2;
+            break;
+        case 2:
+            option = 3;
+            break;
+        default:
+            break;
         }
     }
 
@@ -319,9 +342,6 @@ int main(int argc, char *argv[]) {
             exit(EXIT_SUCCESS);
             // f
             break;
-        case 'l':
-            load();
-            break;
         case ESC_KEY:
             option = 0;
             delay = 1000;
@@ -359,6 +379,15 @@ int main(int argc, char *argv[]) {
         if(!toggle_flg){
             update(movement);
         }
+        if(gameOver) {
+            drawGameOver();
+            gameOver = FALSE;
+            while(wgetch(stdscr) != ESC_KEY) {}
+            title_flg = 0;
+            option = 0;
+            clear();
+            goto START;
+        }
         toggle_flg = 0;
         // mvprintw(0, 0, "%d, %d", current_x, current_y);
         // mvprintw(2, 0, "%d, %d", next_x, next_y);
@@ -370,7 +399,7 @@ int main(int argc, char *argv[]) {
     endwin();
 }
 
-void drawTitle() {
+void drawTitle(bool isSave) {
     mvprintw(5,5, "////////// ////// ////////// /////////  //////// ////////");
     mvprintw(6,5, "   //     //         //     //     //     //    //");
     mvprintw(7,5, "  //     //////     //     /////////     //     //////");
@@ -378,9 +407,16 @@ void drawTitle() {
     mvprintw(9,5, "//     //////     //     //      \\\\  ///////  ///////");
     mvprintw(13, 23, "->");
     mvprintw(13, 26, "NEW GAME");
-    mvprintw(15, 26, "CONTINUE");
-    mvprintw(17, 26, "OPTIONS");
-    mvprintw(19, 26, "CONTROLS");
+    if(isSave) {
+        mvprintw(15, 26, "CONTINUE");
+        mvprintw(17, 26, "OPTIONS");
+        mvprintw(19, 26, "CONTROLS");
+    } else {
+        mvprintw(15, 26, "OPTIONS");
+        mvprintw(17, 26, "CONTROLS");
+    }
+    
+    
 }
 
 void drawControls() {
@@ -389,10 +425,9 @@ void drawControls() {
     mvprintw(7,5, "Left/Right.......Move left and Right");
     mvprintw(8,5, "Space............Hold block");
     mvprintw(9,5, "S................Save game");
-    mvprintw(10,5, "L................Load game");
     mvprintw(11,5, "P................Pause game");
     mvprintw(12,5, "Z................Save and quit game");
-    mvprintw(12,5, "ESC................Go back to title screen");
+    mvprintw(12,5, "ESC..............Go back to title screen");
 }
 
 void drawOptions() {
@@ -409,79 +444,79 @@ void newBlock(Color c) {
     switch(new_tetrimo.color) {
         case(RED):
             new_tetrimo.current_xy[0].x = 19;
-            new_tetrimo.current_xy[0].y = 2;
+            new_tetrimo.current_xy[0].y = 1;
             new_tetrimo.current_xy[1].x = 19;
-            new_tetrimo.current_xy[1].y = 1;
+            new_tetrimo.current_xy[1].y = 0;
             new_tetrimo.current_xy[2].x = 16;
-            new_tetrimo.current_xy[2].y = 2;
+            new_tetrimo.current_xy[2].y = 1;
             new_tetrimo.current_xy[3].x = 22;
-            new_tetrimo.current_xy[3].y = 1;
+            new_tetrimo.current_xy[3].y = 0;
             new_tetrimo.toggle = &toggleRed;
             break;
         case(GREEN):
             new_tetrimo.current_xy[0].x = 19;
-            new_tetrimo.current_xy[0].y = 2;
+            new_tetrimo.current_xy[0].y = 1;
             new_tetrimo.current_xy[1].x = 19;
-            new_tetrimo.current_xy[1].y = 1;
+            new_tetrimo.current_xy[1].y = 0;
             new_tetrimo.current_xy[2].x = 16;
-            new_tetrimo.current_xy[2].y = 1;
+            new_tetrimo.current_xy[2].y = 0;
             new_tetrimo.current_xy[3].x = 22;
-            new_tetrimo.current_xy[3].y = 2;
+            new_tetrimo.current_xy[3].y = 1;
             new_tetrimo.toggle = &toggleGreen;
             break;
         case(CYAN):
             new_tetrimo.current_xy[0].x = 22;
-            new_tetrimo.current_xy[0].y = 4;
+            new_tetrimo.current_xy[0].y = 3;
             new_tetrimo.current_xy[1].x = 22;
-            new_tetrimo.current_xy[1].y = 3;
+            new_tetrimo.current_xy[1].y = 2;
             new_tetrimo.current_xy[2].x = 22;
-            new_tetrimo.current_xy[2].y = 2;
+            new_tetrimo.current_xy[2].y = 1;
             new_tetrimo.current_xy[3].x = 22;
-            new_tetrimo.current_xy[3].y = 1;
+            new_tetrimo.current_xy[3].y = 0;
             new_tetrimo.toggle = &toggleCyan;
             break;
         case(BLUE):
             new_tetrimo.current_xy[0].x = 19;
-            new_tetrimo.current_xy[0].y = 3;
-            new_tetrimo.current_xy[1].x = 19;
-            new_tetrimo.current_xy[1].y = 1;
-            new_tetrimo.current_xy[2].x = 19;
-            new_tetrimo.current_xy[2].y = 2;
-            new_tetrimo.current_xy[3].x = 22;
-            new_tetrimo.current_xy[3].y = 3;
-            new_tetrimo.toggle = &toggleBlue;
-            break;
-        case(YELLOW):
-            new_tetrimo.current_xy[0].x = 19;
             new_tetrimo.current_xy[0].y = 2;
-            new_tetrimo.current_xy[1].x = 22;
-            new_tetrimo.current_xy[1].y = 1;
+            new_tetrimo.current_xy[1].x = 19;
+            new_tetrimo.current_xy[1].y = 0;
             new_tetrimo.current_xy[2].x = 19;
             new_tetrimo.current_xy[2].y = 1;
             new_tetrimo.current_xy[3].x = 22;
             new_tetrimo.current_xy[3].y = 2;
+            new_tetrimo.toggle = &toggleBlue;
+            break;
+        case(YELLOW):
+            new_tetrimo.current_xy[0].x = 19;
+            new_tetrimo.current_xy[0].y = 1;
+            new_tetrimo.current_xy[1].x = 22;
+            new_tetrimo.current_xy[1].y = 0;
+            new_tetrimo.current_xy[2].x = 19;
+            new_tetrimo.current_xy[2].y = 0;
+            new_tetrimo.current_xy[3].x = 22;
+            new_tetrimo.current_xy[3].y = 1;
             new_tetrimo.toggle = &toggleYellow;
             break;
         case(PURPLE):
             new_tetrimo.current_xy[0].x = 19;
-            new_tetrimo.current_xy[0].y = 3;
+            new_tetrimo.current_xy[0].y = 2;
             new_tetrimo.current_xy[1].x = 19;
-            new_tetrimo.current_xy[1].y = 1;
+            new_tetrimo.current_xy[1].y = 0;
             new_tetrimo.current_xy[2].x = 19;
-            new_tetrimo.current_xy[2].y = 2;
+            new_tetrimo.current_xy[2].y = 1;
             new_tetrimo.current_xy[3].x = 22;
-            new_tetrimo.current_xy[3].y = 2;
+            new_tetrimo.current_xy[3].y = 1;
             new_tetrimo.toggle = &togglePurple;
             break;
         case(ORANGE):
             new_tetrimo.current_xy[0].x = 19;
-            new_tetrimo.current_xy[0].y = 3;
+            new_tetrimo.current_xy[0].y = 2;
             new_tetrimo.current_xy[1].x = 19;
-            new_tetrimo.current_xy[1].y = 2;
+            new_tetrimo.current_xy[1].y = 1;
             new_tetrimo.current_xy[2].x = 16;
-            new_tetrimo.current_xy[2].y = 3;
+            new_tetrimo.current_xy[2].y = 2;
             new_tetrimo.current_xy[3].x = 19;
-            new_tetrimo.current_xy[3].y = 1;
+            new_tetrimo.current_xy[3].y = 0;
             new_tetrimo.toggle = &toggleOrange;
             break;
         default:
@@ -493,7 +528,11 @@ void newBlock(Color c) {
     } else {
         next_tetrimo = c;
     }
-    
+    for(int i = 0; i < 4; i++) {
+        currentTetrimo.next_xy[i].x = currentTetrimo.current_xy[i].x;
+        currentTetrimo.next_xy[i].y = currentTetrimo.current_xy[i].y;
+    }
+    draw(currentTetrimo);
     eraseNext(new_tetrimo.color);
     drawNext(next_tetrimo);
 }
@@ -651,8 +690,11 @@ void save() {
 
 void load() {
     FILE *loadfp;
-    if(!(loadfp = fopen("save.txt", "r"))){
-        exit(1);
+    if(!(loadfp = fopen("save.txt", "r+"))) {
+        FILE *err;
+        fopen("err.txt", "w+");
+        fputs("Unable to open file save.txt", err);
+        return;
     }
     char m[9];
     for(int i = 0; i < 25; i++) {
@@ -1168,6 +1210,10 @@ void shift(Orientation o) {
             for(int i = 0; i < 4; i++) {
                 currentTetrimo.next_xy[i].x = currentTetrimo.current_xy[i].x;
                 currentTetrimo.next_xy[i].y = currentTetrimo.current_xy[i].y;
+                if(currentTetrimo.current_xy[i].y==0) {
+                    mvprintw(1,1,"x");
+                    gameOver = TRUE;
+                }
             }
             updateMatrix();
         }
@@ -1175,6 +1221,11 @@ void shift(Orientation o) {
     default:
         break;
     }
+}
+
+void drawGameOver() {
+    clear();
+    mvprintw(15,15,"GAME OVER");
 }
 
 void update(Orientation o) {
