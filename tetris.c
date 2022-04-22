@@ -117,7 +117,7 @@ void erasePurple(Display d);
 void drawOrange(Display d);
 void eraseOrange(Display d);
 void shift(Orientation o);
-void updateBlock(Color b, int next_y);
+void updateScoreLevel();
 void update(Orientation o);
 void toggleRed();
 void toggleGreen();
@@ -144,7 +144,7 @@ bool matrix[25][9];
 
 int delay = 1000;
 int speedcnt = 0;
-int level;
+int level = 1;
 
 int max_y = 0;
 int max_x = 0;
@@ -212,7 +212,7 @@ int main(int argc, char *argv[]) {
 
     int idle_cnt = 0;
     int cnt = 0;
-
+    int o;
     switch(option) {
         case 0:
             break;
@@ -223,25 +223,48 @@ int main(int argc, char *argv[]) {
             clear();
             drawOptions();
             bool options_flg;
+            int new_level;
             while(!options_flg) {
-                while(wgetch(stdscr)!= ESC_KEY) {}
-                title_flg = 0;
-                option = 0;
-                clear();
-                goto START;
+                switch (wgetch(stdscr))
+                {
+                case KEY_LEFT:
+                    if(new_level != 0) {
+                        new_level--;
+                        mvprintw(13, 26, "Level: %d", new_level);
+                    }
+                    break;
+                case KEY_RIGHT:
+                    if(new_level != 20) {
+                        new_level++;
+                        mvprintw(13, 26, "Level: %d", new_level);
+                    }
+                    break;
+                case ESC_KEY:
+                    options_flg = 1;
+                    break;
+                default:
+                    break;
+                }
             }
+            while(level != new_level) {
+                updateScoreLevel();
+            }
+            score = 0;
+            speedcnt = 0;
+            options_flg = 0;
+            title_flg = 0;
+            option = 0;
+            clear();
+            goto START;
             break;
         case 3:
             clear();
             drawControls();
-            bool controls_flg;
-            while(!controls_flg) {
-                while(wgetch(stdscr)!= ESC_KEY) {}
-                title_flg = 0;
-                option = 0;
-                clear();
-                goto START;
-            }
+            while(wgetch(stdscr)!= ESC_KEY) {}
+            title_flg = 0;
+            option = 0;
+            clear();
+            goto START;
             break;
         default:
             break;
@@ -361,7 +384,7 @@ void drawTitle() {
 }
 
 void drawControls() {
-    mvprintw(5,5, "Tab...............Rotate block");
+    mvprintw(5,5, "Tab..............Rotate block");
     mvprintw(6,5, "Down.............Drop block faster");
     mvprintw(7,5, "Left/Right.......Move left and Right");
     mvprintw(8,5, "Space............Hold block");
@@ -370,6 +393,12 @@ void drawControls() {
     mvprintw(11,5, "P................Pause game");
     mvprintw(12,5, "Z................Save and quit game");
     mvprintw(12,5, "ESC................Go back to title screen");
+}
+
+void drawOptions() {
+    mvprintw(13, 23, "->");
+    mvprintw(13, 26, "Level: %d", level);
+    mvprintw(15, 22, "(ESC to go back)");
 }
 
 void newBlock(Color c) {
@@ -572,7 +601,6 @@ void initMatrix() {
             matrix[i][j] = FALSE;
         }
     }
-    level = 1;
     mvprintw(26,16,"Score: %d", score);
     mvprintw(27,16,"Level: %d", level);
     mvprintw(0,38, "Next:");
@@ -1073,8 +1101,6 @@ void updateScoreLevel() {
         timeout(delay);
         speedcnt = 0;
         level++;
-        mvprintw(27,21, "     ");
-        mvprintw(27,16,"Level: %d", level);
     }
 }
 
@@ -1088,6 +1114,8 @@ void checkLine() {
             }
             if(j == 8) {
                 updateScoreLevel();
+                mvprintw(27,21, "     ");
+                mvprintw(27,16,"Level: %d", level);
                 last = i;
                 if(first == 0) {
                     first = i;
