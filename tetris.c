@@ -116,9 +116,9 @@ void drawPurple(Display d);
 void erasePurple(Display d);
 void drawOrange(Display d);
 void eraseOrange(Display d);
-void shift(Orientation o);
-void updateScoreLevel();
-void update(Orientation o);
+bool shift(Orientation o, tetrimo *t);
+void updateScoreLevel(int *score, int *level, int *speedcnt, int *delay);
+bool update(Orientation o);
 void toggleRed(tetrimo *t);
 void toggleGreen(tetrimo *t);
 void toggleCyan(tetrimo *t);
@@ -250,42 +250,42 @@ int main(int argc, char *argv[]) {
                 is2Player = 30;
                 break;
             case 3:
-                clear();
-                drawOptions();
-                bool options_flg;
-                int new_level;
-                while(!options_flg) {
-                    switch (wgetch(stdscr))
-                    {
-                    case KEY_LEFT:
-                        if(new_level != 1) {
-                            new_level--;
-                            mvprintw(13, 26, "Level: %d", new_level);
-                        }
-                        break;
-                    case KEY_RIGHT:
-                        if(new_level != 20) {
-                            new_level++;
-                            mvprintw(13, 26, "Level: %d", new_level);
-                        }
-                        break;
-                    case ESC_KEY:
-                        options_flg = 1;
-                        break;
-                    default:
-                        break;
-                    }
-                }
-                while(level != new_level) {
-                    updateScoreLevel();
-                }
-                score = 0;
-                speedcnt = 0;
-                options_flg = 0;
-                title_flg = 0;
-                option = 0;
-                clear();
-                goto START;
+                // clear();
+                // drawOptions();
+                // bool options_flg;
+                // int new_level;
+                // while(!options_flg) {
+                //     switch (wgetch(stdscr))
+                //     {
+                //     case KEY_LEFT:
+                //         if(new_level != 1) {
+                //             new_level--;
+                //             mvprintw(13, 26, "Level: %d", new_level);
+                //         }
+                //         break;
+                //     case KEY_RIGHT:
+                //         if(new_level != 20) {
+                //             new_level++;
+                //             mvprintw(13, 26, "Level: %d", new_level);
+                //         }
+                //         break;
+                //     case ESC_KEY:
+                //         options_flg = 1;
+                //         break;
+                //     default:
+                //         break;
+                //     }
+                // }
+                // while(level != new_level) {
+                //     updateScoreLevel();
+                // }
+                // score = 0;
+                // speedcnt = 0;
+                // options_flg = 0;
+                // title_flg = 0;
+                // option = 0;
+                // clear();
+                // goto START;
                 break;
             case 4:
                 clear();
@@ -315,8 +315,8 @@ void play(bool isLoad) {
     int idle_cnt = 0;
     int cnt = 0;
     Color next_tetrimo = rand()%7;
-    tetrimo t = newBlock(RANDOM);
-    Color heldTetrimo;
+    tetrimo t = newBlock(RANDOM, &next_tetrimo);
+    Color held_tetrimo;
     bool matrix[25][9];
 
     int delay = 1000;
@@ -356,7 +356,7 @@ void play(bool isLoad) {
             if(cnt++ == 2) {
                 cnt = 0;
                 idle_cnt++;
-                update(movement);
+                update(movement, &t);
             }
             t.toggle();
             toggle_flg = 1;
@@ -365,7 +365,7 @@ void play(bool isLoad) {
             if(cnt++ == 2) {
                 cnt = 0;
                 idle_cnt++;
-                update(movement);
+                update(movement, &t);
             }
             // next_x = current_x + 3;
             movement = RIGHT;
@@ -374,7 +374,7 @@ void play(bool isLoad) {
             if(cnt++ == 2) {
                 cnt = 0;
                 idle_cnt++;
-                update(movement);
+                update(movement, &t);
             }
             movement = LEFT;
             // next_x = current_x - 3;
@@ -414,15 +414,19 @@ void play(bool isLoad) {
             eraseHeld(held_tetrimo);
             held_tetrimo = t.color;
             drawHeld(held_tetrimo); 
-            heldExists = 1;
-            newBlock(RANDOM);
+            heldExists = true;
+            newBlock(RANDOM, &next_tetrimo);
             break;
         default:
             idle_cnt++;
             break;
         }
         if(!toggle_flg){
-            update(movement);
+            if(!update(movement, &t)) {
+                updateMatrix(&t);
+                newBlock(RANDOM, &next_tetrimo);
+                heldLast = false;
+            }
         }
         if(gameOver) {
             drawGameOver();
@@ -436,7 +440,9 @@ void play(bool isLoad) {
         // mvprintw(2, 0, "%d, %d", next_x, next_y);
         // mvprintw(4, 0, "%d", current_orientation);
         // mvprintw(6, 0, "%d", next_orientation);
-        checkLine();
+        if(checkLine()) {
+            updateScoreLevel(&score, &level, &speedcnt, &delay);
+        }
         refresh();
     }
 }
@@ -480,9 +486,9 @@ void drawOptions() {
     mvprintw(15, 22, "(ESC to go back)");
 }
 
-tetrimo newBlock(Color c) {
+tetrimo newBlock(Color c, Color *next_tetrimo) {
     tetrimo new_tetrimo;
-    new_tetrimo.color = next_tetrimo;
+    new_tetrimo.color = *next_tetrimo;
     new_tetrimo.current_orientation = LEFT;
 
     switch(new_tetrimo.color) {
@@ -568,9 +574,9 @@ tetrimo newBlock(Color c) {
     }
     //currentTetrimo = new_tetrimo;
     if(c==RANDOM) {
-        next_tetrimo = rand() % 7;
+        *next_tetrimo = rand() % 7;
     } else {
-        next_tetrimo = c;
+        *next_tetrimo = c;
     }
     for(int i = 0; i < 4; i++) {
         new_tetrimo.next_xy[i].x = new_tetrimo.current_xy[i].x;
@@ -578,7 +584,7 @@ tetrimo newBlock(Color c) {
     }
     draw(new_tetrimo);
     eraseNext(new_tetrimo.color);
-    drawNext(next_tetrimo);
+    drawNext(*next_tetrimo);
     return new_tetrimo;
 }
 
@@ -778,7 +784,7 @@ void load() {
     score = atoi(sc);
     char n[2];
     fscanf(loadfp, "%s", n);
-    newBlock(atoi(n));
+    newBlock(atoi(n), &next_tetrimo);
     char he[2];
     fscanf(loadfp, "%s", he);
     heldExists = atoi(he);
@@ -1176,7 +1182,7 @@ void replaceLines(int first, int last) {
     }
 }
 
-void updateScoreLevel() {
+void updateScoreLevel(int *score, int *level, int *speedcnt, int *delay) {
     score += 100;
     speedcnt += 100;
     if(speedcnt >= 1000) {
@@ -1189,20 +1195,23 @@ void updateScoreLevel() {
         speedcnt = 0;
         level++;
     }
+    mvprintw(26,21, "     ");
+    mvprintw(26,16,"Score: %d", score);
+    mvprintw(27,21, "     ");
+    mvprintw(27,16,"Level: %d", level);
 }
 
-void checkLine() {
+bool checkLine() {
     int first = 0;
     int last = 0;
+    bool cleared;
     for(int i = 24; i >= 0; i--) {
         for(int j = 0; j < 9; j++) {
             if(matrix[i][j] == FALSE) {
                 break;
             }
             if(j == 8) {
-                updateScoreLevel();
-                mvprintw(27,21, "     ");
-                mvprintw(27,16,"Level: %d", level);
+                cleared = true;
                 last = i;
                 if(first == 0) {
                     first = i;
@@ -1213,59 +1222,60 @@ void checkLine() {
     if(first != 0 && last != 0) {
         replaceLines(first, last);
     }
-    mvprintw(26,21, "     ");
-    mvprintw(26,16,"Score: %d", score);
+    return cleared;
 }
 
-void shift(Orientation o, tetrimo *t) {
+bool shift(Orientation o, tetrimo *t) {
     switch (o)
     {
     case RIGHT:
         for(int i = 0; i < 4; i++) {
-            *t.next_xy[i]->x = *t.current_xy[i]->x+3;
-            *t.next_xy[i].y = *t.current_xy[i]->y;
+            (*t)->next_xy[i].x = (*t)->current_xy[i]->x+3;
+            (*t)->next_xy[i].y = (*t)->current_xy[i]->y;
         }
-        if(checkRight(t)) {
+        if(checkRight(*t)) {
             for(int i = 0; i < 4; i++) {
-                *t.next_xy[i]->x = *t.current_xy[i].x;
-                *t.next_xy[i]->y = *t.current_xy[i].y;
+                (*t)->next_xy[i]->x = (*t)->current_xy[i].x;
+                (*t)->next_xy[i]->y = (*t)->current_xy[i].y;
             }
         }
         break;
     case LEFT:
         for(int i = 0; i < 4; i++) {
-                *t.next_xy[i]->x = *t.current_xy[i]->x-3;
-                *t.next_xy[i]->y = *t.current_xy[i]->y;
+                (*t)->next_xy[i]->x = (*t)->current_xy[i]->x-3;
+                (*t)->next_xy[i]->y = (*t)->current_xy[i]->y;
         }
-        if(checkLeft(t)) {
+        if(checkLeft(*t)) {
             for(int i = 0; i < 4; i++) {
-                *t.next_xy[i]->x = *t.current_xy[i]->x;
-                *t.next_xy[i]->y = *t.current_xy[i]->y;
+                (*t)->next_xy[i]->x = (*t)->current_xy[i]->x;
+                (*t)->next_xy[i]->y = (*t)->current_xy[i]->y;
             }
         }
         break;
     case DOWN:
         for(int i = 0; i < 4; i++) {
-                *t.next_xy[i]->x = *t.current_xy[i]->x;
-                *t.next_xy[i]->y = *t.current_xy[i]->y+1;
+                (*t)->next_xy[i].x = (*t)->current_xy[i].x;
+                (*t)->next_xy[i].y = (*t)->current_xy[i].y+1;
         }
-        if(checkDown(t)) {
-            mvprintw(*t.next_xy[0]->y, *t.next_xy[0]->x, "x");
-            block_flg = 1;
-            heldLast = FALSE;
-            for(int i = 0; i < 4; i++) {
-                *t.next_xy[i]->x = *t.current_xy[i]->x;
-                *t.next_xy[i]->y = *t.current_xy[i]->y;
-                if(*t.current_xy[i].y==0) {
-                    gameOver = TRUE;
-                }
-            }
+        if(checkDown(*t)) {
+            //mvprintw(*t)->next_xy[0]->y, (*t)->next_xy[0]->x, "x");
+            //block_flg = true;
+            //heldLast = FALSE;
+            // for(int i = 0; i < 4; i++) {
+            //     (*t)->next_xy[i].x = (*t)->current_xy[i].x;
+            //     (*t)->next_xy[i].y = (*t)->current_xy[i].y;
+            //     if((*t)->current_xy[i].y==0) {
+            //         gameOver = TRUE;
+            //     }
+            // }
+            return true;
             //updateMatrix(tetrimo t);
         }
         break;
     default:
         break;
     }
+    return false;
 }
 
 void drawGameOver() {
@@ -1273,20 +1283,33 @@ void drawGameOver() {
     mvprintw(15,15,"GAME OVER");
 }
 
-void update(Orientation o) {
-    shift(o);
-    if(block_flg){
-        block_flg = 0;
-        updateMatrix(tetrimo t);
-        newBlock(RANDOM);
-    } else {
-        elim(currentTetrimo);
-        draw(currentTetrimo);
+bool update(Orientation o, tetrimo *t) {
+    if(shift(o)) {
         for(int i = 0; i < 4; i++) {
-            currentTetrimo.current_xy[i].x = currentTetrimo.next_xy[i].x;
-            currentTetrimo.current_xy[i].y = currentTetrimo.next_xy[i].y;
+            (*t)->next_xy[i].x = (*t)->current_xy[i].x;
+            (*t)->next_xy[i].y = (*t)->current_xy[i].y;
+            if((*t)->current_xy[i].y==0) {
+                gameOver = TRUE;
+            }
+        }
+        // updateMatrix(*t);
+        // newBlock(RANDOM);
+        return false;
+    }
+    // if(block_flg){
+    //     block_flg = 0;
+    //     updateMatrix(*t);
+    //     newBlock(RANDOM);
+    // } 
+    else {
+        elim(*t);
+        draw(*t);
+        for(int i = 0; i < 4; i++) {
+            (*t)->current_xy[i].x = (*t)->next_xy[i].x;
+            (*t)->current_xy[i].y = (*t)->next_xy[i].y;
         }
     }
+    return true;
 }
 
 void elim(tetrimo t) {
