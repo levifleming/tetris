@@ -5,7 +5,11 @@
 #include <stdbool.h>
 #include <time.h>
 #include <signal.h>
+//#include <pthread.h>
 
+#include "tcp_client.h"
+
+// to compile for windows: gcc -I/mingw64/include/ncurses -o tetris.exe tetris.c tcp_client.c -lncurses -lws2_32 -L/mingw64/bin -static
 //
 //    ////////// ////// ////////// /////////  //////// ////////
 //       //     //         //     //     //     //    //
@@ -104,23 +108,23 @@ typedef struct tetrimo {
 } tetrimo;
 
 void initMatrix(bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH]);
-void drawBoard(int score, int level);
+void drawBoard(int score, int level, int offset);
 void draw(tetrimo t);
 void elim(tetrimo t);
-void drawRed(Display d);
-void eraseRed(Display d);
-void drawGreen(Display d);
-void eraseGreen(Display d);
-void drawCyan(Display d);
-void eraseCyan(Display d);
-void drawBlue(Display d);
-void eraseBlue(Display d);
-void drawYellow(Display d);
-void eraseYellow(Display d);
-void drawPurple(Display d);
-void erasePurple(Display d);
-void drawOrange(Display d);
-void eraseOrange(Display d);
+void drawRed(Display d, int offset);
+void eraseRed(Display d, int offset);
+void drawGreen(Display d, int offset);
+void eraseGreen(Display d, int offset);
+void drawCyan(Display d, int offset);
+void eraseCyan(Display d, int offset);
+void drawBlue(Display d, int offset);
+void eraseBlue(Display d, int offset);
+void drawYellow(Display d, int offset);
+void eraseYellow(Display d, int offset);
+void drawPurple(Display d, int offset);
+void erasePurple(Display d, int offset);
+void drawOrange(Display d, int offset);
+void eraseOrange(Display d, int offset);
 bool shift(Orientation o, tetrimo *t, bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH]);
 void updateScoreLevel(int *score, int *level, int *speedcnt, int *delay);
 bool update(Orientation o, tetrimo *t, bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH], bool *gameOver);
@@ -131,49 +135,31 @@ void toggleBlue(struct tetrimo *t, bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH]);
 void toggleYellow(struct tetrimo *t, bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH]);
 void togglePurple(struct tetrimo *t, bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH]);
 void toggleOrange(struct tetrimo *t, bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH]);
-void eraseNext(Color c);
-void drawNext(Color c);
-tetrimo newBlock(Color c, Color *next_tetrimo);
+void eraseNext(Color c, int offset);
+void drawNext(Color c, int offset);
+tetrimo newBlock(Color c, Color *next_tetrimo, int offset);
 bool checkLine();
 void save(bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH], Color current_color, int delay, int speedcnt, int level, int score, Color next_tetrimo, bool heldExists, bool heldLast, Color held_tetrimo);
 void load(bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH], Color *current_color, int *delay, int *speedcnt, int *level, int *score, Color *next_tetrimo, bool *heldExists, bool *heldLast, Color *held_tetrimo);
-void drawHeld(Color c);
-void eraseHeld(Color c);
+void drawHeld(Color c, int offset);
+void eraseHeld(Color c, int offset);
 void drawTitle(bool isSave);
 void drawOptions(int level);
 void drawControls();
 void drawGameOver();
 bool checkDown(tetrimo t, bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH]);
 void updateMatrix(tetrimo t, bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH]);
-void play(bool isLoad, int level, int delay);
-
-//tetrimo currentTetrimo;
-
-// bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH];
-
-// int delay = 1000;
-// int speedcnt = 0;
-// int level = 1;
+void play(bool is2Player, bool isLoad);
 
 int max_y = 0;
 int max_x = 0;
 
-
-// int pause_flg;
-// int toggle_flg;
-// int block_flg;
+//pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
 bool gameOver;
-// int score;
 
-int is2Player;
+
     FILE *err;
-    
-
-//Color next_tetrimo;
-//Color held_tetrimo;
-// bool heldExists;
-// bool heldLast;
 
 int main(int argc, char *argv[]) {
     err = fopen("err.txt", "w+");
@@ -185,13 +171,11 @@ int main(int argc, char *argv[]) {
     curs_set(FALSE);
     keypad(stdscr, TRUE);
     timeout(INITIAL_DELAY);
-    int level;
-    int score;
-    int speedcnt;
-    int delay;
+    int level = 1;
+    int score = 0;
+    int speedcnt = 0;
+    int delay = 1000;
     while(1) {
-        level = 1;
-        delay = 1000;
         getmaxyx(stdscr, max_y, max_x);
 
         START:
@@ -253,16 +237,39 @@ int main(int argc, char *argv[]) {
         refresh();
 
         
-        
+        int player;
         switch(option) {
             case 0:
-                play(false, level, delay);
+                clear();
+                play(false, false);
                 break;
             case 1:
-                play(true, level, delay);
+                clear();
+                play(false, true);
                 break;
             case 2:
-                is2Player = 30;
+                clear();
+                //play(true, false);
+                Config con;
+                con.host = "10.0.0.2";
+                con.port = "8085";
+                SOCKET sock;
+                int c = tcp_client_connect(con, &sock);
+                char q[3];
+                    sprintf(q, "%d", c);
+                    log(q);
+                if(c != -1 && c != 1 && c != 2) {
+                    log("Connected!");
+                    
+                    fclose(err);
+                } else {
+                    log("Connect failed");
+                    fclose(err);
+                }
+                char message[10] = "Test";
+                tcp_client_send_request(&sock, message);
+                tcp_client_receive_response(&sock);
+                tcp_client_close(sock);
                 break;
             case 3:
                 clear();
@@ -322,13 +329,16 @@ int main(int argc, char *argv[]) {
     endwin();
 }
 
-void play(bool isLoad, int level, int delay) {
+void play(bool is2Player, bool isLoad) {
+    // char s[2];
+    // sprintf(s, "%d", *p);
+    // log(s);
     bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH];
     int score = 0;
     Color held_tetrimo;
-    //int delay = 1000;
+    int delay = 1000;
     int speedcnt = 0;
-    //int level = 1;
+    int level = 1;
 
     bool pause_flg = false;
     bool toggle_flg = false;
@@ -336,8 +346,6 @@ void play(bool isLoad, int level, int delay) {
 
     bool gameOver = false;
     
-    int is2Player = 0;
-
     bool heldExists = false;
     bool heldLast = false;
     
@@ -346,15 +354,44 @@ void play(bool isLoad, int level, int delay) {
     
     Color next_tetrimo = rand()%7;
     Color c = RANDOM;
-    if(isLoad) {
-        load(matrix, &c, &delay, &speedcnt, &level, &score, &next_tetrimo, &heldExists, &heldLast, &held_tetrimo);
-        timeout(delay);
-    }
-    drawBoard(score, level);
-    int idle_cnt = 0;
+    
     int cnt = 0;
     
-    tetrimo t = newBlock(c, &next_tetrimo);
+    tetrimo t = newBlock(c, &next_tetrimo, 0);
+
+    // bool matrix2[MATRIX_LENGTH-1][MATRIX_WIDTH];
+    // int score2;
+    // Color held_tetrimo2;
+    // int delay2;
+    // int speedcnt2;
+    // int level2;
+
+    // bool toggle_flg2;
+    // bool block_flg2;
+
+    // bool gameOver;
+    
+    // bool heldExists2;
+    // bool heldLast2;
+    // Color next_tetrimo2;
+    // Color c2;
+    int offset;
+        
+    // int cnt2;
+    
+    if(!is2Player && !isLoad) {
+        drawBoard(score, level, 0);
+    } else if(isLoad) {
+        drawBoard(score, level, 0);
+        load(matrix, &c, &delay, &speedcnt, &level, &score, &next_tetrimo, &heldExists, &heldLast, &held_tetrimo);
+        timeout(delay);
+    }else {
+        offset = 55;
+        drawBoard(score, level, 0);
+        drawBoard(score, level, offset);
+    }
+  
+    //int idle_cnt = 0;
     
     
     while(1) {
@@ -374,7 +411,7 @@ void play(bool isLoad, int level, int delay) {
         case '\t':
             if(cnt++ == 2) {
                 cnt = 0;
-                idle_cnt++;
+                //idle_cnt++;
                 update(movement, &t, matrix, &gameOver);
             }
             t.toggle(&t, matrix);
@@ -383,7 +420,7 @@ void play(bool isLoad, int level, int delay) {
         case KEY_RIGHT:
             if(cnt++ == 2) {
                 cnt = 0;
-                idle_cnt++;
+                //idle_cnt++;
                 update(movement, &t, matrix, &gameOver);
             }
             // next_x = current_x + 3;
@@ -392,7 +429,7 @@ void play(bool isLoad, int level, int delay) {
         case KEY_LEFT:
             if(cnt++ == 2) {
                 cnt = 0;
-                idle_cnt++;
+                //idle_cnt++;
                 update(movement, &t, matrix, &gameOver);
             }
             movement = LEFT;
@@ -406,6 +443,22 @@ void play(bool isLoad, int level, int delay) {
             endwin();
             exit(EXIT_SUCCESS);
             // f
+            break;
+        case ' ':
+            if(heldLast) {
+                break;
+            }
+            heldLast = TRUE;
+            elim(t);
+            if(heldExists) {
+                eraseNext(next_tetrimo, 0);
+                next_tetrimo = held_tetrimo;
+            }
+            eraseHeld(held_tetrimo, 0);
+            held_tetrimo = t.color;
+            drawHeld(held_tetrimo, 0); 
+            heldExists = true;
+            t = newBlock(RANDOM, &next_tetrimo, 0);
             break;
         case ESC_KEY:
             delay = 1000;
@@ -421,30 +474,15 @@ void play(bool isLoad, int level, int delay) {
             fclose(err);
             return;
             break;
-        case ' ':
-            if(heldLast) {
-                break;
-            }
-            heldLast = TRUE;
-            elim(t);
-            if(heldExists) {
-                eraseNext(next_tetrimo);
-                next_tetrimo = held_tetrimo;
-            }
-            eraseHeld(held_tetrimo);
-            held_tetrimo = t.color;
-            drawHeld(held_tetrimo); 
-            heldExists = true;
-            t = newBlock(RANDOM, &next_tetrimo);
-            break;
         default:
-            idle_cnt++;
+            cnt = 0;
+            //idle_cnt++;
             break;
         }
         if(!toggle_flg){
             if(!update(movement, &t, matrix, &gameOver)) {
                 updateMatrix(t, matrix);
-                t = newBlock(RANDOM, &next_tetrimo);
+                t = newBlock(RANDOM, &next_tetrimo, 0);
                 heldLast = false;
             }
         }
@@ -468,6 +506,7 @@ void play(bool isLoad, int level, int delay) {
         }
         refresh();
     }
+    fclose(err);
 }
 
 void drawTitle(bool isSave) {
@@ -509,7 +548,7 @@ void drawOptions(int level) {
     mvprintw(15, 22, "(ESC to go back)");
 }
 
-tetrimo newBlock(Color c, Color *next_tetrimo) {
+tetrimo newBlock(Color c, Color *next_tetrimo, int offset) {
     tetrimo new_tetrimo;
     new_tetrimo.color = *next_tetrimo;
     new_tetrimo.current_orientation = LEFT;
@@ -520,79 +559,79 @@ tetrimo newBlock(Color c, Color *next_tetrimo) {
     // fputs(c, err);
     switch(new_tetrimo.color) {
         case(RED):
-            new_tetrimo.current_xy[0].x = 19;
+            new_tetrimo.current_xy[0].x = 19+offset+offset;
             new_tetrimo.current_xy[0].y = 1;
-            new_tetrimo.current_xy[1].x = 19;
+            new_tetrimo.current_xy[1].x = 19+offset;
             new_tetrimo.current_xy[1].y = 0;
-            new_tetrimo.current_xy[2].x = 16;
+            new_tetrimo.current_xy[2].x = 16+offset;
             new_tetrimo.current_xy[2].y = 1;
-            new_tetrimo.current_xy[3].x = 22;
+            new_tetrimo.current_xy[3].x = 22+offset;
             new_tetrimo.current_xy[3].y = 0;
             new_tetrimo.toggle = &toggleRed;
             break;
         case(GREEN):
-            new_tetrimo.current_xy[0].x = 19;
+            new_tetrimo.current_xy[0].x = 19+offset;
             new_tetrimo.current_xy[0].y = 1;
-            new_tetrimo.current_xy[1].x = 19;
+            new_tetrimo.current_xy[1].x = 19+offset;
             new_tetrimo.current_xy[1].y = 0;
-            new_tetrimo.current_xy[2].x = 16;
+            new_tetrimo.current_xy[2].x = 16+offset;
             new_tetrimo.current_xy[2].y = 0;
-            new_tetrimo.current_xy[3].x = 22;
+            new_tetrimo.current_xy[3].x = 22+offset;
             new_tetrimo.current_xy[3].y = 1;
             new_tetrimo.toggle = &toggleGreen;
             break;
         case(CYAN):
-            new_tetrimo.current_xy[0].x = 22;
+            new_tetrimo.current_xy[0].x = 22+offset;
             new_tetrimo.current_xy[0].y = 3;
-            new_tetrimo.current_xy[1].x = 22;
+            new_tetrimo.current_xy[1].x = 22+offset;
             new_tetrimo.current_xy[1].y = 2;
-            new_tetrimo.current_xy[2].x = 22;
+            new_tetrimo.current_xy[2].x = 22+offset;
             new_tetrimo.current_xy[2].y = 1;
-            new_tetrimo.current_xy[3].x = 22;
+            new_tetrimo.current_xy[3].x = 22+offset;
             new_tetrimo.current_xy[3].y = 0;
             new_tetrimo.toggle = &toggleCyan;
             break;
         case(BLUE):
-            new_tetrimo.current_xy[0].x = 19;
+            new_tetrimo.current_xy[0].x = 19+offset;
             new_tetrimo.current_xy[0].y = 2;
-            new_tetrimo.current_xy[1].x = 19;
+            new_tetrimo.current_xy[1].x = 19+offset;
             new_tetrimo.current_xy[1].y = 0;
-            new_tetrimo.current_xy[2].x = 19;
+            new_tetrimo.current_xy[2].x = 19+offset;
             new_tetrimo.current_xy[2].y = 1;
-            new_tetrimo.current_xy[3].x = 22;
+            new_tetrimo.current_xy[3].x = 22+offset;
             new_tetrimo.current_xy[3].y = 2;
             new_tetrimo.toggle = &toggleBlue;
             break;
         case(YELLOW):
-            new_tetrimo.current_xy[0].x = 19;
+            new_tetrimo.current_xy[0].x = 19+offset;
             new_tetrimo.current_xy[0].y = 1;
-            new_tetrimo.current_xy[1].x = 22;
+            new_tetrimo.current_xy[1].x = 22+offset;
             new_tetrimo.current_xy[1].y = 0;
-            new_tetrimo.current_xy[2].x = 19;
+            new_tetrimo.current_xy[2].x = 19+offset;
             new_tetrimo.current_xy[2].y = 0;
-            new_tetrimo.current_xy[3].x = 22;
+            new_tetrimo.current_xy[3].x = 22+offset;
             new_tetrimo.current_xy[3].y = 1;
             new_tetrimo.toggle = &toggleYellow;
             break;
         case(PURPLE):
-            new_tetrimo.current_xy[0].x = 19;
+            new_tetrimo.current_xy[0].x = 19+offset;
             new_tetrimo.current_xy[0].y = 2;
-            new_tetrimo.current_xy[1].x = 19;
+            new_tetrimo.current_xy[1].x = 19+offset;
             new_tetrimo.current_xy[1].y = 0;
-            new_tetrimo.current_xy[2].x = 19;
+            new_tetrimo.current_xy[2].x = 19+offset;
             new_tetrimo.current_xy[2].y = 1;
-            new_tetrimo.current_xy[3].x = 22;
+            new_tetrimo.current_xy[3].x = 22+offset;
             new_tetrimo.current_xy[3].y = 1;
             new_tetrimo.toggle = &togglePurple;
             break;
         case(ORANGE):
-            new_tetrimo.current_xy[0].x = 19;
+            new_tetrimo.current_xy[0].x = 19+offset;
             new_tetrimo.current_xy[0].y = 2;
-            new_tetrimo.current_xy[1].x = 19;
+            new_tetrimo.current_xy[1].x = 19+offset;
             new_tetrimo.current_xy[1].y = 1;
-            new_tetrimo.current_xy[2].x = 16;
+            new_tetrimo.current_xy[2].x = 16+offset;
             new_tetrimo.current_xy[2].y = 2;
-            new_tetrimo.current_xy[3].x = 19;
+            new_tetrimo.current_xy[3].x = 19+offset;
             new_tetrimo.current_xy[3].y = 0;
             new_tetrimo.toggle = &toggleOrange;
             break;
@@ -610,128 +649,127 @@ tetrimo newBlock(Color c, Color *next_tetrimo) {
         new_tetrimo.next_xy[i].y = new_tetrimo.current_xy[i].y;
     }
     draw(new_tetrimo);
-    eraseNext(new_tetrimo.color);
-    drawNext(*next_tetrimo);
+    eraseNext(new_tetrimo.color, offset);
+    drawNext(*next_tetrimo, offset);
     return new_tetrimo;
 }
 
-void eraseNext(Color c) {
+void eraseNext(Color c, int offset) {
     for(int i = 2; i < 6; i++) {
-        mvprintw(i, 39, "             ");
+        mvprintw(i, 39+offset, "             ");
     }
 }
 
-void drawNext(Color c) {
+void drawNext(Color c, int offset) {
     switch(c) {
         case(RED):
-            drawRed(NEXT);
+            drawRed(NEXT, offset);
             break;
         case(GREEN):
-            drawGreen(NEXT);
+            drawGreen(NEXT, offset);
             break;
         case(CYAN):
-            drawCyan(NEXT);
+            drawCyan(NEXT, offset);
             break;
         case(BLUE):
-            drawBlue(NEXT);
+            drawBlue(NEXT, offset);
             break;
         case(YELLOW):
-            drawYellow(NEXT);
+            drawYellow(NEXT, offset);
             break;
         case(PURPLE):
-            drawPurple(NEXT);
+            drawPurple(NEXT, offset);
             break;
         case(ORANGE):
-            drawOrange(NEXT);
+            drawOrange(NEXT, offset);
             break;
         default:
             break;
     }
 }
 
-void eraseHeld(Color c) {
+void eraseHeld(Color c, int offset) {
     switch(c) {
         case(RED):
-            eraseRed(HOLD);
+            eraseRed(HOLD, offset);
             break;
         case(GREEN):
-            eraseGreen(HOLD);
+            eraseGreen(HOLD, offset);
             break;
         case(CYAN):
-            eraseCyan(HOLD);
+            eraseCyan(HOLD, offset);
             break;
         case(BLUE):
-            eraseBlue(HOLD);
+            eraseBlue(HOLD, offset);
             break;
         case(YELLOW):
-            eraseYellow(HOLD);
+            eraseYellow(HOLD, offset);
             break;
         case(PURPLE):
-            erasePurple(HOLD);
+            erasePurple(HOLD, offset);
             break;
         case(ORANGE):
-            eraseOrange(HOLD);
+            eraseOrange(HOLD, offset);
             break;
         default:
             break;
     }
 }
 
-void drawHeld(Color c) {
+void drawHeld(Color c, int offset) {
     switch(c) {
         case(RED):
-            drawRed(HOLD);
+            drawRed(HOLD, offset);
             break;
         case(GREEN):
-            drawGreen(HOLD);
+            drawGreen(HOLD, offset);
             break;
         case(CYAN):
-            drawCyan(HOLD);
+            drawCyan(HOLD, offset);
             break;
         case(BLUE):
-            drawBlue(HOLD);
+            drawBlue(HOLD, offset);
             break;
         case(YELLOW):
-            drawYellow(HOLD);
+            drawYellow(HOLD, offset);
             break;
         case(PURPLE):
-            drawPurple(HOLD);
+            drawPurple(HOLD, offset);
             break;
         case(ORANGE):
-            drawOrange(HOLD);
+            drawOrange(HOLD, offset);
             break;
         default:
             break;
     }
 }
 
-void drawBoard(int score, int level) {
-    mvprintw(26,16,"Score: %d", score);
-    mvprintw(27,16,"Level: %d", level);
-    mvprintw(0,38, "Next:");
-    mvprintw(1,39, "_____________");
+void drawBoard(int score, int level, int offset) {
+    //clear();
+    int i;
+    for(i = 0; i < MATRIX_LENGTH - 1; i++) {
+        mvprintw(i, 5+offset, MATRIX);
+    }
+    mvprintw(i, 5+offset, MATRIX_BOTTOM);
+    mvprintw(26,16+offset,"Score: %d", score);
+    mvprintw(27,16+offset,"Level: %d", level);
+    mvprintw(0,38+offset, "Next:");
+    mvprintw(1,39+offset, "_____________");
     for(int i = 2; i < 7; i++) {
-        mvprintw(i,38,"|");
-        mvprintw(i,52,"|");
+        mvprintw(i,38+offset,"|");
+        mvprintw(i,52+offset,"|");
     }
-    mvprintw(6,39, "_____________");
-    mvprintw(11,39, "_____________");
+    mvprintw(6,39+offset, "_____________");
+    mvprintw(11,39+offset, "_____________");
     for(int i = 12; i < 17; i++) {
-        mvprintw(i,38,"|");
-        mvprintw(i,52,"|");
+        mvprintw(i,38+offset,"|");
+        mvprintw(i,52+offset,"|");
     }
-    mvprintw(16,39, "_____________");
-    mvprintw(10,38, "Hold:");
+    mvprintw(16,39+offset, "_____________");
+    mvprintw(10,38+offset, "Hold:");
 }
 
 void initMatrix(bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH]) {
-    clear();
-    int i;
-    for(i = 0; i < MATRIX_LENGTH - 1; i++) {
-        mvprintw(i, 5, MATRIX);
-    }
-    mvprintw(i, 5, MATRIX_BOTTOM);
-
     for(int i = 0; i < 25; i++) {
         for(int j = 0; j < 9; j++) {
             matrix[i][j] = FALSE;
@@ -826,9 +864,9 @@ void load(bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH], Color *current_color, int 
         (*heldLast) = atoi(hl);
         char h[2];
         fscanf(loadfp, "%s", h);
-        eraseHeld(*held_tetrimo);
+        eraseHeld(*held_tetrimo, 0);
         (*held_tetrimo) = atoi(h);
-        drawHeld(*held_tetrimo);
+        drawHeld(*held_tetrimo, 0);
     }
     fclose(loadfp);
 }
@@ -1174,9 +1212,6 @@ void toggleOrange(struct tetrimo *t, bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH])
 
 void hitMatrix(int x, int y, bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH]) {
     matrix[y][matrixtoblock(x)] = true;
-    char c[10];
-    sprintf(c, "(%d,%d)", x, y);
-    log(c);
 }
 
 void updateMatrix(tetrimo t, bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH]) {
@@ -1184,7 +1219,6 @@ void updateMatrix(tetrimo t, bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH]) {
         // mvprintw(4+i,0,"%d, %d", currentTetrimo.current_xy[i].x, currentTetrimo.current_xy[i].y);
         hitMatrix(t.current_xy[i].x, t.current_xy[i].y, matrix);
     }
-    log("\n");
 }
 
 void eraseLine(int y, bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH]) {
@@ -1341,15 +1375,8 @@ bool update(Orientation o, tetrimo *t, bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH
                 (*gameOver) = TRUE;
             }
         }
-        // updateMatrix(*t);
-        // newBlock(RANDOM);
         return false;
     }
-    // if(block_flg){
-    //     block_flg = 0;
-    //     updateMatrix(*t);
-    //     newBlock(RANDOM);
-    // } 
     else {
         elim(*t);
         draw(*t);
@@ -1373,198 +1400,198 @@ void draw(tetrimo t) {
     }
 }
 
-void eraseRed(Display d) {
+void eraseRed(Display d, int offset) {
     if(d == NEXT) {
-        whiteout(4, 41);
-        whiteout(4, 44);
-        whiteout(3, 44);
-        whiteout(3, 47);
+        whiteout(4, 41+offset);
+        whiteout(4, 44+offset);
+        whiteout(3, 44+offset);
+        whiteout(3, 47+offset);
     } else {
-        whiteout(14, 41);
-        whiteout(14, 44);
-        whiteout(13, 44);
-        whiteout(13, 47);
+        whiteout(14, 41+offset);
+        whiteout(14, 44+offset);
+        whiteout(13, 44+offset);
+        whiteout(13, 47+offset);
     }
 }
 
-void drawRed(Display d) {
+void drawRed(Display d, int offset) {
     if(d == NEXT) {
-        paint(4, 41);
-        paint(4, 44);
-        paint(3, 44);
-        paint(3, 47);
+        paint(4, 41+offset);
+        paint(4, 44+offset);
+        paint(3, 44+offset);
+        paint(3, 47+offset);
     } else {
-        paint(14, 41);
-        paint(14, 44);
-        paint(13, 44);
-        paint(13, 47);
+        paint(14, 41+offset);
+        paint(14, 44+offset);
+        paint(13, 44+offset);
+        paint(13, 47+offset);
     }
 }
 
-void eraseGreen(Display d) {
+void eraseGreen(Display d, int offset) {
     if(d == NEXT) {
-        whiteout(3, 41);
-        whiteout(3, 44);
-        whiteout(4, 44);
-        whiteout(4, 47);
+        whiteout(3, 41+offset);
+        whiteout(3, 44+offset);
+        whiteout(4, 44+offset);
+        whiteout(4, 47+offset);
     } else {
-        whiteout(13, 41);
-        whiteout(13, 44);
-        whiteout(14, 44);
-        whiteout(14, 47);
+        whiteout(13, 41+offset);
+        whiteout(13, 44+offset);
+        whiteout(14, 44+offset);
+        whiteout(14, 47+offset);
     }
 }
 
-void drawGreen(Display d) {
+void drawGreen(Display d, int offset) {
     if(d == NEXT) {
-        paint(3, 41);
-        paint(3, 44);
-        paint(4, 44);
-        paint(4, 47);
+        paint(3, 41+offset);
+        paint(3, 44+offset);
+        paint(4, 44+offset);
+        paint(4, 47+offset);
     } else {
-        paint(13, 41);
-        paint(13, 44);
-        paint(14, 44);
-        paint(14, 47);
+        paint(13, 41+offset);
+        paint(13, 44+offset);
+        paint(14, 44+offset);
+        paint(14, 47+offset);
     }
 }
 
-void drawCyan(Display d) {
+void drawCyan(Display d, int offset) {
     if(d == NEXT) {
-        paint(2, 44);
-        paint(3, 44);
-        paint(4, 44);
-        paint(5, 44);
+        paint(2, 44+offset);
+        paint(3, 44+offset);
+        paint(4, 44+offset);
+        paint(5, 44+offset);
     } else {
-        paint(12, 44);
-        paint(13, 44);
-        paint(14, 44);
-        paint(15, 44);
+        paint(12, 44+offset);
+        paint(13, 44+offset);
+        paint(14, 44+offset);
+        paint(15, 44+offset);
     }
 }
 
-void eraseCyan(Display d) {
+void eraseCyan(Display d, int offset) {
     if(d == NEXT) {
-        whiteout(2, 44);
-        whiteout(3, 44);
-        whiteout(4, 44);
-        whiteout(5, 44);
+        whiteout(2, 44+offset);
+        whiteout(3, 44+offset);
+        whiteout(4, 44+offset);
+        whiteout(5, 44+offset);
     } else {
-        whiteout(12, 44);
-        whiteout(13, 44);
-        whiteout(14, 44);
-        whiteout(15, 44);
+        whiteout(12, 44+offset);
+        whiteout(13, 44+offset);
+        whiteout(14, 44+offset);
+        whiteout(15, 44+offset);
     }
 }
 
-void drawBlue(Display d) {
+void drawBlue(Display d, int offset) {
     if(d == NEXT) {
-        paint(2, 44);
-        paint(3, 44);
-        paint(4, 44);
-        paint(4, 47);
+        paint(2, 44+offset);
+        paint(3, 44+offset);
+        paint(4, 44+offset);
+        paint(4, 47+offset);
     } else {
-        paint(12, 44);
-        paint(13, 44);
-        paint(14, 44);
-        paint(14, 47);
+        paint(12, 44+offset);
+        paint(13, 44+offset);
+        paint(14, 44+offset);
+        paint(14, 47+offset);
     }
 }
 
-void eraseBlue(Display d) {
+void eraseBlue(Display d, int offset) {
     if(d == NEXT) {
-        whiteout(2, 44);
-        whiteout(3, 44);
-        whiteout(4, 44);
-        whiteout(4, 47);
+        whiteout(2, 44+offset);
+        whiteout(3, 44+offset);
+        whiteout(4, 44+offset);
+        whiteout(4, 47+offset);
     } else {
-        whiteout(12, 44);
-        whiteout(13, 44);
-        whiteout(14, 44);
-        whiteout(14, 47);
+        whiteout(12, 44+offset);
+        whiteout(13, 44+offset);
+        whiteout(14, 44+offset);
+        whiteout(14, 47+offset);
     }
 }
 
-void drawYellow(Display d) {
+void drawYellow(Display d, int offset) {
     if(d == NEXT) {
-        paint(2, 41);
-        paint(2, 44);
-        paint(3, 41);
-        paint(3, 44);
+        paint(2, 41+offset);
+        paint(2, 44+offset);
+        paint(3, 41+offset);
+        paint(3, 44+offset);
     } else {
-        paint(12, 41);
-        paint(12, 44);
-        paint(13, 41);
-        paint(13, 44);
+        paint(12, 41+offset);
+        paint(12, 44+offset);
+        paint(13, 41+offset);
+        paint(13, 44+offset);
     }
 }
 
-void eraseYellow(Display d) {
+void eraseYellow(Display d, int offset) {
     if(d == NEXT) {
-        whiteout(2, 41);
-        whiteout(2, 44);
-        whiteout(3, 41);
-        whiteout(3, 44);
+        whiteout(2, 41+offset);
+        whiteout(2, 44+offset);
+        whiteout(3, 41+offset);
+        whiteout(3, 44+offset);
     } else {
-        whiteout(12, 41);
-        whiteout(12, 44);
-        whiteout(13, 41);
-        whiteout(13, 44);
+        whiteout(12, 41+offset);
+        whiteout(12, 44+offset);
+        whiteout(13, 41+offset);
+        whiteout(13, 44+offset);
     }
 }
 
-void drawPurple(Display d) {
+void drawPurple(Display d, int offset) {
     if(d == NEXT) {
-        paint(2, 41);
-        paint(3, 41);
-        paint(3, 44);
-        paint(4, 41);
+        paint(2, 41+offset);
+        paint(3, 41+offset);
+        paint(3, 44+offset);
+        paint(4, 41+offset);
     } else {
-        paint(12, 41);
-        paint(13, 41);
-        paint(13, 44);
-        paint(14, 41);
+        paint(12, 41+offset);
+        paint(13, 41+offset);
+        paint(13, 44+offset);
+        paint(14, 41+offset);
     }
 }
 
-void erasePurple(Display d) {
+void erasePurple(Display d, int offset) {
     if(d == NEXT) {
-        whiteout(2, 41);
-        whiteout(3, 41);
-        whiteout(3, 44);
-        whiteout(4, 41);
+        whiteout(2, 41+offset);
+        whiteout(3, 41+offset);
+        whiteout(3, 44+offset);
+        whiteout(4, 41+offset);
     } else {
-        whiteout(12, 41);
-        whiteout(13, 41);
-        whiteout(13, 44);
-        whiteout(14, 41);
+        whiteout(12, 41+offset);
+        whiteout(13, 41+offset);
+        whiteout(13, 44+offset);
+        whiteout(14, 41+offset);
     }
 }
 
-void drawOrange(Display d) {
+void drawOrange(Display d, int offset) {
     if(d == NEXT) {
-        paint(2, 44);
-        paint(3, 44);
-        paint(4, 44);
-        paint(4, 41);
+        paint(2, 44+offset);
+        paint(3, 44+offset);
+        paint(4, 44+offset);
+        paint(4, 41+offset);
     } else {
-        paint(12, 44);
-        paint(13, 44);
-        paint(14, 44);
-        paint(14, 41);
+        paint(12, 44+offset);
+        paint(13, 44+offset);
+        paint(14, 44+offset);
+        paint(14, 41+offset);
     }
 }
 
-void eraseOrange(Display d) {
+void eraseOrange(Display d, int offset) {
     if(d == NEXT) {
-        whiteout(2, 44);
-        whiteout(3, 44);
-        whiteout(4, 44);
-        whiteout(4, 41);
+        whiteout(2, 44+offset);
+        whiteout(3, 44+offset);
+        whiteout(4, 44+offset);
+        whiteout(4, 41+offset);
     } else {
-        whiteout(12, 44);
-        whiteout(13, 44);
-        whiteout(14, 44);
-        whiteout(14, 41);
+        whiteout(12, 44+offset);
+        whiteout(13, 44+offset);
+        whiteout(14, 44+offset);
+        whiteout(14, 41+offset);
     }
 }
