@@ -21,6 +21,7 @@ int tcp_client_connect(Config config, SOCKET *ConnectSocket) {
     int iResult;
     iResult = WSAStartup(MAKEWORD(2,2), &wsadata);
     if(iResult != 0) {
+        // fclose(fp);
         return 1;
     }
 
@@ -33,8 +34,9 @@ int tcp_client_connect(Config config, SOCKET *ConnectSocket) {
     hints.ai_flags = AI_PASSIVE;
 
     if (iResult = getaddrinfo(config.host, config.port, &hints, &res) != 0) {
-        fprintf(stderr, "Couldn't get address info\r");
+        // fputs("Couldn't get address info\r", fp);
         WSACleanup();
+        // fclose(fp);
         return 1;
     }
 
@@ -42,22 +44,28 @@ int tcp_client_connect(Config config, SOCKET *ConnectSocket) {
     (*ConnectSocket) = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
 
     if ((*ConnectSocket) == INVALID_SOCKET) {
-        //fprintf(stderr, "Couldn't connect to server\r\n");
+        // fputs("Couldn't connect to server\r\n", fp);
         //tcp_client_print_usage(!ERROR);
         freeaddrinfo(res);
         WSACleanup();
+        // fclose(fp);
         return 1;
     }
     iResult = connect((*ConnectSocket), res->ai_addr, res->ai_addrlen);
     if(iResult == SOCKET_ERROR) {
+        // fputs("Invalid socket\r\n", fp);
         closesocket((*ConnectSocket));
         (*ConnectSocket) = INVALID_SOCKET;
+        // fclose(fp);
+        return 1;
     } else {
-        // log_info("Connected to server!\r");
+        // fputs("Connected to server\r\n", fp);
         request_count = 0;
         freeaddrinfo(res);
     }
-    return 2;
+    // fputs("no errror", fp);
+    // fclose(fp);
+    return 0;
 }
 
 /*
@@ -72,6 +80,9 @@ Return value:
 */
 
 int tcp_client_send_request(SOCKET *ConnectSocket, char *message) {
+    FILE *fp;
+
+    fp = fopen("client.txt", "w+");
     int length = strlen(message);
     int iResult;
     // char *sock_mes;
@@ -79,25 +90,30 @@ int tcp_client_send_request(SOCKET *ConnectSocket, char *message) {
     // sock_mes = malloc(mes_size);
 
     // sprintf(sock_mes, "%d %s",length, message);
-    // log_debug("Sending: %s", sock_mes);
+    fputs(message, fp);
     int bytes_sent = send((*ConnectSocket), message, length, 0);
     // log_debug("Bytes sent: %d (%d/%d)\r", bytes_sent, bytes_sent, strlen(sock_mes));
     // free(sock_mes);
     request_count++;
     // log_debug("request_count: %d", request_count);
+    fputc('\n', fp);
     if (bytes_sent == -1) {
-        // fprintf(stderr, "Bytes sent is incorrect\n");
+        fputs("Bytes sent is incorrect\n", fp);
         closesocket((*ConnectSocket));
         WSACleanup();
+        fclose(fp);
         return EXIT_FAILURE;
     }
     iResult = shutdown((*ConnectSocket), SD_SEND);
     if (iResult == SOCKET_ERROR) {
-        printf("shutdown failed: %d\n", WSAGetLastError());
+        fputs("shutdown failed\n", fp);
         closesocket((*ConnectSocket));
         WSACleanup();
+        fclose(fp);
         return EXIT_FAILURE;
     }
+    fputs("send", fp);
+    fclose(fp);
     return EXIT_SUCCESS;
 }
 
@@ -111,7 +127,7 @@ Return value:
     Returns a 1 on failure, 0 on success
 */
 
-int tcp_client_receive_response(SOCKET *ConnectSocket) {
+int tcp_client_receive_response(SOCKET *ConnectSocket, char *message) {
     // for (int i = 0; i < request_count + 1; i++) {
     //     // log_debug("Recieving response header");
     //     int header_size = 0;
@@ -145,21 +161,19 @@ int tcp_client_receive_response(SOCKET *ConnectSocket) {
     //         return EXIT_SUCCESS;
     //     }
     // }
-    int recvbuflen = 512;
-    char recvbuf[512];
+    int recvbuflen = 25*11;
     int iResult;
-    FILE *fp;
     char c[50];
-    fp = fopen("socket.txt", "w+");
     do {
-        iResult = recv((*ConnectSocket), recvbuf, recvbuflen, 0);
+        iResult = recv((*ConnectSocket), message, recvbuflen, 0);
         if (iResult > 0)
-            sprintf(c, "Bytes received: %d", iResult);
+            sprintf(c, "Bytes received: %d\nMessage: %s", iResult, message);
         else if (iResult == 0)
             sprintf(c, "Connection closed\n");
         else
             sprintf(c, "recv failed: %d\n", WSAGetLastError());
-        fputs(c, fp);
+        // fputs(c, fp);
+        // fclose(fp);
     } while (iResult > 0);
     return EXIT_FAILURE;
 }

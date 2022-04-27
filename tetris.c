@@ -8,6 +8,7 @@
 //#include <pthread.h>
 
 #include "tcp_client.h"
+#include "tcp_server.h"
 
 // to compile for windows: gcc -I/mingw64/include/ncurses -o tetris.exe tetris.c tcp_client.c -lncurses -lws2_32 -L/mingw64/bin -static
 //
@@ -81,6 +82,7 @@
 #define whiteout(y, x) mvprintw(y, x, "   ");
 #define log(x) fputs(x, err);
 #define blocktomatrix(x) (x*3)+7
+#define blocktomatrix2(x) (x*3)+62
 #define matrixtoblock(x) (x-7)/3
 #define MATRIX "|                             |"
 #define MATRIX_BOTTOM "|_____________________________|"
@@ -149,7 +151,9 @@ void drawControls();
 void drawGameOver();
 bool checkDown(tetrimo t, bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH]);
 void updateMatrix(tetrimo t, bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH]);
-void play(bool is2Player, bool isLoad);
+void play(bool is2Player, bool isLoad, bool isClient);
+int hostOrClient();
+void drawSecondPlayer(char *second);
 
 int max_y = 0;
 int max_x = 0;
@@ -241,35 +245,36 @@ int main(int argc, char *argv[]) {
         switch(option) {
             case 0:
                 clear();
-                play(false, false);
+                play(false, false, false);
                 break;
             case 1:
                 clear();
-                play(false, true);
+                play(false, true, false);
                 break;
             case 2:
                 clear();
                 //play(true, false);
-                Config con;
-                con.host = "10.0.0.2";
-                con.port = "8085";
-                SOCKET sock;
-                int c = tcp_client_connect(con, &sock);
-                char q[3];
-                    sprintf(q, "%d", c);
-                    log(q);
-                if(c != -1 && c != 1 && c != 2) {
-                    log("Connected!");
-                    
-                    fclose(err);
+                int client = hostOrClient();
+                if(client) {
+                                        // char q[3];
+                    // sprintf(q, "%d", c);
+                    // log(q);
+                    // if(c != -1 && c != 1) {
+                    //     log("Connected!");
+                        
+                    //     fclose(err);
+                    // } else {
+                    //     log("Connect failed");
+                    //     fclose(err);
+                    // }
+                    // char message[10] = "Test";
+                    // tcp_client_send_request(&sock, message);
+                    // tcp_client_receive_response(&sock);
+                    // tcp_client_close(sock);
+                    play(true, false, true);
                 } else {
-                    log("Connect failed");
-                    fclose(err);
+                    play(true, false, false);
                 }
-                char message[10] = "Test";
-                tcp_client_send_request(&sock, message);
-                tcp_client_receive_response(&sock);
-                tcp_client_close(sock);
                 break;
             case 3:
                 clear();
@@ -329,7 +334,7 @@ int main(int argc, char *argv[]) {
     endwin();
 }
 
-void play(bool is2Player, bool isLoad) {
+void play(bool is2Player, bool isLoad, bool isClient) {
     // char s[2];
     // sprintf(s, "%d", *p);
     // log(s);
@@ -390,8 +395,19 @@ void play(bool is2Player, bool isLoad) {
         drawBoard(score, level, 0);
         drawBoard(score, level, offset);
     }
+    SOCKET csock;
+    SOCKET lsock;
+    Config con;
+    if(is2Player) {
+        if(isClient) {
+            con.host = "10.0.0.2";
+            con.port = "8085";
+        } else {
+            tcp_server_create(&lsock);
+        }
+    }
   
-    //int idle_cnt = 0;
+    int idle_cnt = 0;
     
     
     while(1) {
@@ -472,13 +488,20 @@ void play(bool is2Player, bool isLoad) {
             heldLast = FALSE;
             clear();
             fclose(err);
+            if(is2Player) {
+                if(isClient) {
+                    tcp_client_close(csock);
+                } else {
+                    tcp_server_close(csock, lsock);
+                }
+            }
             return;
             break;
         default:
             cnt = 0;
-            //idle_cnt++;
             break;
         }
+        idle_cnt++;
         if(!toggle_flg){
             if(!update(movement, &t, matrix, &gameOver)) {
                 updateMatrix(t, matrix);
@@ -504,9 +527,119 @@ void play(bool is2Player, bool isLoad) {
         if(checkLine(matrix)) {
             updateScoreLevel(&score, &level, &speedcnt, &delay);
         }
+        if(is2Player) {
+            // char send[25*11];
+            // char receive[25*11];
+            char send[34];
+            char receive[34];
+            // for(int i = 0; i < 25; i++) {
+            //     for(int j = 0; j < 9; j++) {
+            //         if(matrix[i][j] == TRUE){
+            //             send[(i*9)+j] = '1';
+            //         } else {
+            //             send[(i*9)+j] = '0';
+            //         }
+            //     }
+            // }
+            sprintf(send, "%02d%02d%02d%02d%02d%02d%02d%02d\0", 
+                    t.current_xy[0].y, t.current_xy[0].x,
+                    t.current_xy[1].y, t.current_xy[1].x,
+                    t.current_xy[2].y, t.current_xy[2].x,
+                    t.current_xy[3].y, t.current_xy[3].x);
+
+            char c[5];
+            sprintf(c, "%d", idle_cnt);
+            if(isClient) {  
+                FILE *s;
+                s = fopen("client_err.txt", "w+");
+                if(tcp_client_connect(con, &csock)) {
+                    fputs("connect error", s);
+                }
+                if(tcp_client_send_request(&csock, send)) {
+                    fputs("send request error", s);
+                }
+                // if(tcp_client_receive_response(&sock, receive)) {
+                //     fputs("receive response rror", s);
+                // }
+                tcp_client_close(csock);
+                fputs(c, s);
+                fclose(s);
+            } else {
+                FILE *q;
+                q = fopen("server_err.txt", "w+");
+
+                if(tcp_server_accept_connection(&lsock, &csock)) {
+                    fputs("accept connection errror", q); 
+                }
+                if(tcp_server_receive_request(&csock, receive)) {
+                    fputs("receive request errror", q);
+                }
+                drawSecondPlayer(receive);
+                // if(tcp_server_send_response(&sock, send)) {
+                //     fputs("send response eror", q);
+                // }
+                //tcp_server_close(sock);
+                fputs(c, q);
+                fclose(q);
+        }
+    }
         refresh();
     }
     fclose(err);
+}
+
+void drawSecondPlayer(char *second) {
+    // for(int i = 0; i < 25; i++) {
+    //     for(int j = 0; j < 9; j++) {
+    //         if(second[(i*9)+j] == '1'){
+    //             paint(i, blocktomatrix2(j));
+    //         } else if(second[(i*9)+j] == '0') {
+    //             whiteout(i, blocktomatrix2(j));
+    //         }
+    //     }
+    // }
+    int y;
+    int x;
+    char d[5];
+    FILE *f;
+    f = fopen("adfsd.txt", "w+");
+    static tetrimo last;
+    static bool hasLast;
+    if(hasLast) {
+        for(int i = 0; i < 4; i++) {
+            whiteout(last.current_xy[i].y, last.current_xy[i].x+55);
+        }
+    }
+    for(int i = 0; i < 16; i+=4) {
+        if(second[i]=='0') {
+            sprintf(d, "%c", second[i+1]);
+        } else {
+            sprintf(d, "%c%c", second[i], second[i+1]);
+        }
+       
+        y = atoi(d);
+        char q[5];
+        sprintf(q, "|%d|", y);
+        fputs(q, f);
+        if(second[i+2]=='0') {
+            sprintf(d, "%c", second[i+3]);
+        } else {
+            sprintf(d, "%c%c", second[i+2], second[i+3]);
+        }
+        x = atoi(d);
+        sprintf(q, "|%d|", x);
+        fputs(q, f);
+        fputs(d, f);
+        paint(y, x+55);
+        last.current_xy[i/4].y = y;
+        last.current_xy[i/4].x = x;
+        if((last.current_xy[1/4].y - y) > 3) {
+            hasLast = false;
+        } else {
+            hasLast = true;
+        }
+    }
+    fclose(f);
 }
 
 void drawTitle(bool isSave) {
@@ -546,6 +679,41 @@ void drawOptions(int level) {
     mvprintw(13, ARROW_X, "->");
     mvprintw(13, 26, "Level: %d", level);
     mvprintw(15, 22, "(ESC to go back)");
+}
+
+int hostOrClient() {
+    mvprintw(13, ARROW_X, "->");
+    mvprintw(13, 26, "HOST");
+    mvprintw(15, 26, "JOIN");
+
+    int option = 0;
+    bool select_flg = false;
+    int arrow_pos = 13;
+    while(!select_flg) {
+        switch(wgetch(stdscr)) {
+            case KEY_UP:
+                if(option != 0) {
+                    option--;
+                    mvprintw(arrow_pos, ARROW_X, "  ");
+                    arrow_pos -= 2;
+                    mvprintw(arrow_pos, ARROW_X, "->");
+                }
+                break;
+            case KEY_DOWN:
+                if(option != 1) {
+                    option++;
+                    mvprintw(arrow_pos, ARROW_X, "  ");
+                    arrow_pos += 2;
+                    mvprintw(arrow_pos, ARROW_X, "->");
+                }
+                break;
+            case '\n':
+                select_flg = TRUE;
+            default:
+                break;
+        }
+    }
+    return option;
 }
 
 tetrimo newBlock(Color c, Color *next_tetrimo, int offset) {

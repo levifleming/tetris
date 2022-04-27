@@ -26,7 +26,6 @@ typedef struct Config {
     char *host;
 } Config;
 
-
 ////////////////////////////////////////////////////
 ///////////// SOCKET RELATED FUNCTIONS /////////////
 ////////////////////////////////////////////////////
@@ -45,7 +44,7 @@ int tcp_client_send_request(SOCKET *ConnectSocket, char *message);
 // false value. After the response is handled by the handle_response function pointer, the response
 // data can be safely deleted. The string passed to the function pointer must be null terminated.
 // Return 1 (EXIT_FAILURE) if an error occurs, otherwise return 0 (EXIT_SUCCESS).
-int tcp_client_receive_response(SOCKET *ConnectSocket);
+int tcp_client_receive_response(SOCKET *ConnectSocket, char *message);
 
 // Close the socket when your program is done running.
 void tcp_client_close(SOCKET ConnectSocket);
