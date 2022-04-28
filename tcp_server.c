@@ -68,6 +68,8 @@ int tcp_server_accept_connection(SOCKET *ListenSocket, SOCKET *ClientSocket) {
     *ClientSocket = INVALID_SOCKET;
 
     // Accept a client socket
+    // FILE *fp;
+    // fp = fopen("server.txt", "w+");
     *ClientSocket = accept(*ListenSocket, NULL, NULL);
     if (*ClientSocket == INVALID_SOCKET) {
         // fputs("accept failed\n", fp);
@@ -82,7 +84,7 @@ int tcp_server_accept_connection(SOCKET *ListenSocket, SOCKET *ClientSocket) {
 }
 
 int tcp_server_receive_request(SOCKET *ClientSocket, char *message) {
-    int recvbuflen = 25*11;
+    int recvbuflen = 226;
     int iResult;
     FILE *fp;
 
@@ -92,15 +94,15 @@ int tcp_server_receive_request(SOCKET *ClientSocket, char *message) {
     iResult = recv(*ClientSocket, message, recvbuflen, 0);
     if (iResult > 0) {
         fputs(message, fp);
-    } else if (iResult == 0)
+    } else if (iResult == 0) {
         fputs("Connection closing...\n", fp);
-    else {
+    } else {
         char c[50];
-        sprintf(c, "recv failed: %d", WSAGetLastError());
-        fputs(c, fp);
+        // sprintf(c, "recv failed: %d", WSAGetLastError());
+        // fputs(c, fp);
         closesocket(*ClientSocket);
         WSACleanup();
-        fclose(fp);
+        // fclose(fp);
         return 1;
     }
     fputs("receive", fp);

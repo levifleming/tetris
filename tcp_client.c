@@ -104,14 +104,14 @@ int tcp_client_send_request(SOCKET *ConnectSocket, char *message) {
         fclose(fp);
         return EXIT_FAILURE;
     }
-    iResult = shutdown((*ConnectSocket), SD_SEND);
-    if (iResult == SOCKET_ERROR) {
-        fputs("shutdown failed\n", fp);
-        closesocket((*ConnectSocket));
-        WSACleanup();
-        fclose(fp);
-        return EXIT_FAILURE;
-    }
+    // iResult = shutdown((*ConnectSocket), SD_SEND);
+    // if (iResult == SOCKET_ERROR) {
+    //     fputs("shutdown failed\n", fp);
+    //     closesocket((*ConnectSocket));
+    //     WSACleanup();
+    //     fclose(fp);
+    //     return EXIT_FAILURE;
+    // }
     fputs("send", fp);
     fclose(fp);
     return EXIT_SUCCESS;
@@ -161,21 +161,25 @@ int tcp_client_receive_response(SOCKET *ConnectSocket, char *message) {
     //         return EXIT_SUCCESS;
     //     }
     // }
-    int recvbuflen = 25*11;
+    // FILE *fp;
+
+    // fp = fopen("client.txt", "w+");
+    int recvbuflen = 226;
     int iResult;
-    char c[50];
-    do {
-        iResult = recv((*ConnectSocket), message, recvbuflen, 0);
-        if (iResult > 0)
-            sprintf(c, "Bytes received: %d\nMessage: %s", iResult, message);
-        else if (iResult == 0)
-            sprintf(c, "Connection closed\n");
-        else
-            sprintf(c, "recv failed: %d\n", WSAGetLastError());
-        // fputs(c, fp);
-        // fclose(fp);
-    } while (iResult > 0);
-    return EXIT_FAILURE;
+    char c[80];
+    iResult = recv((*ConnectSocket), message, recvbuflen, 0);
+    if (iResult > 0)
+        sprintf(c, "Bytes received: %d\nMessage: %s", iResult, message);
+    else if (iResult == 0)
+        sprintf(c, "Connection closed\n");
+    else {
+        sprintf(c, "recv failed: %d\n", WSAGetLastError());
+        return 1;
+    }
+        
+    // fputs(c, fp);
+    // fclose(fp);
+    return 0;
 }
 
 /*

@@ -18,6 +18,13 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+typedef struct server_info {
+    SOCKET lsock;
+    SOCKET csock;
+    char receive[30];
+    char send[30];
+} server_info;
+
 int tcp_server_create(SOCKET *ListenSocket);
 
 int tcp_server_accept_connection(SOCKET *ListenSocket, SOCKET *ClientSocket);
