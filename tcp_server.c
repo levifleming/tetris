@@ -1,6 +1,6 @@
 #include "tcp_server.h"
 
-int tcp_server_create(SOCKET *ListenSocket) {
+int tcp_server_create(SOCKET *ListenSocket, int *port) {
     WSADATA wsaData;
     int iResult;
     // Initialize Winsock
@@ -18,9 +18,10 @@ int tcp_server_create(SOCKET *ListenSocket) {
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = IPPROTO_TCP;
     hints.ai_flags = AI_PASSIVE;
-
+    char p[7];
+    sprintf(p, "%d", *port);
     // Resolve the local address and port to be used by the server
-    iResult = getaddrinfo(NULL, DEFAULT_PORT, &hints, &result);
+    iResult = getaddrinfo(NULL, p, &hints, &result);
     if (iResult != 0) {
         // fputs("getaddrinfo failed\n", fp);
         WSACleanup();
@@ -86,16 +87,16 @@ int tcp_server_accept_connection(SOCKET *ListenSocket, SOCKET *ClientSocket) {
 int tcp_server_receive_request(SOCKET *ClientSocket, char *message) {
     int recvbuflen = 226;
     int iResult;
-    FILE *fp;
+    // FILE *fp;
 
-    fp = fopen("server.txt", "w+");
+    // fp = fopen("server.txt", "w+");
     // Receive until the peer shuts down the connection
 
     iResult = recv(*ClientSocket, message, recvbuflen, 0);
     if (iResult > 0) {
-        fputs(message, fp);
+        // fputs(message, fp);
     } else if (iResult == 0) {
-        fputs("Connection closing...\n", fp);
+        // fputs("Connection closing...\n", fp);
     } else {
         char c[50];
         // sprintf(c, "recv failed: %d", WSAGetLastError());
@@ -105,23 +106,31 @@ int tcp_server_receive_request(SOCKET *ClientSocket, char *message) {
         // fclose(fp);
         return 1;
     }
-    fputs("receive", fp);
-    fclose(fp);
+    // fputs("receive", fp);
+    // fclose(fp);
     return 0;
 }
 
 int tcp_server_send_response(SOCKET *ClientSocket, char *message) {
+    FILE *fp;
+
+    fp = fopen("data/server.txt", "w+");
+    fputs(message, fp);
     int iSendResult;
     int length = (sizeof(char *)) * strlen(message);
     // Echo the buffer back to the sender
     iSendResult = send(*ClientSocket, message, length, 0);
     if (iSendResult == SOCKET_ERROR) {
-        printf("send failed: %d\n", WSAGetLastError());
+        fputs("send failed", fp);
+        fclose(fp);
         closesocket(*ClientSocket);
         WSACleanup();
         return 1;
     }
-    printf("Bytes sent: %d\n", iSendResult);
+    fputs("send", fp);
+    fclose(fp);
+    return 0;
+    // printf("Bytes sent: %d\n", iSendResult);
 }
 
 void tcp_server_close(SOCKET ClientSocket, SOCKET ListenSocket) {

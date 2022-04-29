@@ -1,7 +1,7 @@
 #ifndef TCP_SERVER_H_
 #define TCP_SERVER_H_
 
-#define DEFAULT_PORT "8085"
+#define DEFAULT_PORT "8088"
 #define DEFAULT_BUFLEN 512
 
 #include <winsock2.h>
@@ -25,7 +25,7 @@ typedef struct server_info {
     char send[30];
 } server_info;
 
-int tcp_server_create(SOCKET *ListenSocket);
+int tcp_server_create(SOCKET *ListenSocket, int *port);
 
 int tcp_server_accept_connection(SOCKET *ListenSocket, SOCKET *ClientSocket);
 

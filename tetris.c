@@ -152,8 +152,10 @@ void drawGameOver();
 bool checkDown(tetrimo t, bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH]);
 void updateMatrix(tetrimo t, bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH]);
 void *play(void *id);
-void *server();
-void *client();
+void *server(void *port);
+void *client(void *con);
+void getIpAddr(char *ip);
+int getPort();
 int hostOrClient();
 void drawSecondPlayer(char *second);
 
@@ -166,12 +168,12 @@ bool gameOver;
 
 tetrimo currentTetrimo;
 
-    FILE *err;
+    // FILE *err;
 
 bool matrix_g[MATRIX_LENGTH-1][MATRIX_WIDTH];
 
 int main(int argc, char *argv[]) {
-    err = fopen("err.txt", "w+");
+    // err = fopen("err.txt", "w+");
     time_t t;
     srand((unsigned) time(&t));
 
@@ -189,7 +191,7 @@ int main(int argc, char *argv[]) {
         gameOver = false;
         START:
         int numOptions = 4;
-        if(!fopen("save.txt", "r")){
+        if(!fopen("savefiles/save.txt", "r")){
             numOptions = 3;
             drawTitle(FALSE);
         } else {
@@ -263,7 +265,8 @@ int main(int argc, char *argv[]) {
                 clear();
                 //play(true, false);
                 int isClient = hostOrClient();
-                if(isClient) {
+                currentTetrimo.current_xy[0].x = 0;
+                if(isClient == 1) {
                     game = 2;
                                         // char q[3];
                     // sprintf(q, "%d", c);
@@ -280,9 +283,22 @@ int main(int argc, char *argv[]) {
                     // tcp_client_send_request(&sock, message);
                     // tcp_client_receive_response(&sock);
                     // tcp_client_close(sock);pthread_t server_id;
+                    // FILE *fp;
+                    // fp = fopen("data/adddr.txt", "w+");
                     Config con;
-                    con.host = "10.0.0.2";
-                    con.port = "8085";
+                    clear();
+                    char host[20];
+                    getIpAddr(host);
+                    con.host = host;
+                    clear();
+                    //con.host = "10.0.0.2";
+                    char port[20];
+                    sprintf(port, "%d", getPort());
+                    con.port = port;
+                    // fputs(con.host, fp);
+                    // fputs(con.port, fp);
+                    // fclose(fp);
+                    
                     pthread_t client_id;
                     pthread_t play_id;
                     pthread_create(&client_id, NULL, client, (void *)&con);
@@ -290,15 +306,21 @@ int main(int argc, char *argv[]) {
                     // pthread_join(server_id, NULL);
                     pthread_join(play_id, NULL);
                     //play((void *)&game);
-                } else {
+                } else if(isClient == 0) {
                     game = 3;
+                    clear();
+                    int port = getPort();
+                    
+                    clear();
                     pthread_t server_id;
                     pthread_t play_id;
-                    pthread_create(&server_id, NULL, server, NULL);
+                    pthread_create(&server_id, NULL, server, (void *)&port);
                     pthread_create(&play_id, NULL, play, (void *)&game);
                     // pthread_join(server_id, NULL);
                     pthread_join(play_id, NULL);
                     // tcp_server_close(csock, lsock);
+                } else {
+                    break;
                 }
                 break;
             case 3:
@@ -439,13 +461,15 @@ void *play(void *id) {
     
     while(1) {
         if(pause_flg) {
+            pthread_mutex_lock(&mutex);
             mvprintw(13,18, "PAUSED");
             while(wgetch(stdscr) != 'p'){}
             mvprintw(13,18, "      ");
+            pthread_mutex_unlock(&mutex);
             pause_flg = false;
         }
         Orientation movement = DOWN;
-        int key = wgetch(stdscr);
+        int key = wgetch((stdscr));
         switch (key)
         {
         case 'p':
@@ -455,7 +479,9 @@ void *play(void *id) {
             if(cnt++ == 2) {
                 cnt = 0;
                 //idle_cnt++;
+                pthread_mutex_lock(&mutex);
                 update(movement, &t, matrix_g, &gameOver);
+                pthread_mutex_unlock(&mutex);
             }
             t.toggle(&t, matrix_g);
             toggle_flg = true;
@@ -464,7 +490,9 @@ void *play(void *id) {
             if(cnt++ == 2) {
                 cnt = 0;
                 //idle_cnt++;
+                pthread_mutex_lock(&mutex);
                 update(movement, &t, matrix_g, &gameOver);
+                pthread_mutex_unlock(&mutex);
             }
             // next_x = current_x + 3;
             movement = RIGHT;
@@ -473,7 +501,9 @@ void *play(void *id) {
             if(cnt++ == 2) {
                 cnt = 0;
                 //idle_cnt++;
+                pthread_mutex_lock(&mutex);
                 update(movement, &t, matrix_g, &gameOver);
+                pthread_mutex_unlock(&mutex);
             }
             movement = LEFT;
             // next_x = current_x - 3;
@@ -492,6 +522,7 @@ void *play(void *id) {
                 break;
             }
             heldLast = TRUE;
+            pthread_mutex_lock(&mutex);
             elim(t);
             if(heldExists) {
                 eraseNext(next_tetrimo, 0);
@@ -502,6 +533,7 @@ void *play(void *id) {
             drawHeld(held_tetrimo, 0); 
             heldExists = true;
             t = newBlock(RANDOM, &next_tetrimo, 0);
+            pthread_mutex_unlock(&mutex);
             break;
         case ESC_KEY:
             delay = 1000;
@@ -515,7 +547,7 @@ void *play(void *id) {
             heldLast = FALSE;
             gameOver = true;
             clear();
-            fclose(err);
+            // fclose(err);
             // if(game == 2) {
             //     tcp_client_close(csock);
             // } else if (game == 3) {
@@ -529,11 +561,13 @@ void *play(void *id) {
         }
         idle_cnt++;
         if(!toggle_flg){
+            pthread_mutex_lock(&mutex);
             if(!update(movement, &t, matrix_g, &gameOver)) {
                 updateMatrix(t, matrix_g);
                 t = newBlock(RANDOM, &next_tetrimo, 0);
                 heldLast = false;
             }
+            pthread_mutex_unlock(&mutex);
         }
         currentTetrimo = t;
         if(gameOver) {
@@ -552,55 +586,13 @@ void *play(void *id) {
         // mvprintw(4, 0, "%d", current_orientation);
         // mvprintw(6, 0, "%d", next_orientation);
         if(checkLine(matrix_g)) {
+            pthread_mutex_lock(&mutex);
             updateScoreLevel(&score, &level, &speedcnt, &delay);
+            pthread_mutex_unlock(&mutex);
         }
-        // if(game == 2) {
-        //     char send[226];
-        //     char receive[226];
-        //     // char send[34];
-        //     // char receive[34];
-        //     for(int i = 0; i < 25; i++) {
-        //         for(int j = 0; j < 9; j++) {
-        //             if(matrix_g[i][j] == TRUE){
-        //                 send[(i*9)+j] = '1';
-        //             } else {
-        //                 send[(i*9)+j] = '0';
-        //             }
-        //         }
-        //     }
-            
-        //     for(int i = 0; i < 4; i++) {
-        //         send[(t.current_xy[i].y*9)+matrixtoblock(t.current_xy[i].x)] = '1';
-        //     }
-        //     send[225] = '\0';
-        //     FILE *s;
-        //     s = fopen("client_err.txt", "w+");
-        //     fputs("connecting", s);
-        //     if(tcp_client_connect(con, &csock)) {
-        //         fputs("connect error", s);
-        //     }
-        //     fputs("connected\n", s);
-            
-        //     if(tcp_client_send_request(&csock, send)) {
-        //         fputs("send request error", s);
-        //     }
-        //     fputs("sent\n", s);
-            
-        //     // if(tcp_client_receive_response(&csock, receive)) {
-        //     //     fputs("receive response rror", s);
-        //     // }
-        //     fputs("client closing", s);
-        //     tcp_client_close(csock);
-        //     // fputs(c, s);
-        //     fclose(s);
-
-        //     drawSecondPlayer(receive);
-
-        // }
     }
-        refresh();
-    // }
-    fclose(err);
+    refresh();
+    // fclose(err);
 }
 
 void *client(void *con) {
@@ -609,71 +601,12 @@ void *client(void *con) {
     char send[226];
     Config *conf = (Config *)con;
     Config config = *conf;
-
-    for(int i = 0; i < 25; i++) {
-        for(int j = 0; j < 9; j++) {
-            if(matrix_g[i][j] == TRUE){
-                send[(i*9)+j] = '1';
-            } else {
-                send[(i*9)+j] = '0';
-            }
-        }
-    }
-    
-    for(int i = 0; i < 4; i++) {
-        send[(currentTetrimo.current_xy[i].y*9)+matrixtoblock(currentTetrimo.current_xy[i].x)] = '1';
-    }
-    send[225] = '\0';
-    FILE *s;
-    s = fopen("client_err.txt", "w+");
-    fputs("connecting", s);
-    if(tcp_client_connect(config, &c)) {
-        fputs("connect error", s);
-    }
-    fputs("connected\n", s);
-    
-    if(tcp_client_send_request(&c, send)) {
-        fputs("send request error", s);
-    }
-    fputs("sent\n", s);
-    
-    // if(tcp_client_receive_response(&csock, receive)) {
-    //     fputs("receive response rror", s);
-    // }
-    fputs("client closing", s);
-    tcp_client_close(c);
-    // fputs(c, s);
-    fclose(s);
-
-    drawSecondPlayer(receive);
-}
-
-void *server() {
-    SOCKET l;
-    SOCKET c;
-    char receive[226];
-    char send[226];
-
-    tcp_server_create(&l);
     while(!gameOver) {
-        FILE *q;
-        q = fopen("server_err.txt", "w+");
-        fputs("waiting connection", q);
-        // fclose(q);
-        if(tcp_server_accept_connection(&l, &c)) {
-            q = fopen("server_err.txt", "w+");
-            fputs("accept connection errror", q); 
-        }
-        fputs("receiving", q);
-        //problem here
-        if(tcp_server_receive_request(&c, receive)) {
-            fputs("receive request errror", q);
-        }
-        fputs("sending", q);
-        fclose(q);
-        int j;
+        FILE *s;
+        s = fopen("data/client_err.txt", "w+");
+        
         for(int i = 0; i < 25; i++) {
-            for(j = 0; j < 9; j++) {
+            for(int j = 0; j < 9; j++) {
                 if(matrix_g[i][j] == TRUE){
                     send[(i*9)+j] = '1';
                 } else {
@@ -682,13 +615,78 @@ void *server() {
             }
         }
         
-        for(int i = 0; i < 4; i++) {
-            send[(currentTetrimo.current_xy[i].y*9)+matrixtoblock(currentTetrimo.current_xy[i].x)] = '1';
+        
+        if(currentTetrimo.current_xy[0].x != 0) {
+            for(int i = 0; i < 4; i++) {
+                send[(currentTetrimo.current_xy[i].y*9)+matrixtoblock(currentTetrimo.current_xy[i].x)] = '1';
+            }
+        }
+  
+        send[225] = '\0';
+        if(tcp_client_connect(config, &c)) {
+            fputs("connect error", s);
+        }        
+        if(tcp_client_send_request(&c, send)) {
+            fputs("send request error", s);
+        }
+        
+        if(tcp_client_receive_response(&c, receive)) {
+            fputs("receive response rror", s);
+        }
+        fclose(s);
+        tcp_client_close(c);
+        
+        pthread_mutex_lock(&mutex);
+        drawSecondPlayer(receive);
+        pthread_mutex_unlock(&mutex);
+    }
+}
+
+void *server(void *port) {
+    int *p = (int *)port;
+    SOCKET l;
+    SOCKET c;
+    char receive[226];
+    char send[226];
+    bool firstConnect = false;
+    tcp_server_create(&l, p);
+    while(!gameOver) {
+        FILE *q;
+        q = fopen("data/server_err.txt", "w+");
+        if(firstConnect == false) {
+            pthread_mutex_lock(&mutex);
+        }
+        if(tcp_server_accept_connection(&l, &c)) {
+            fputs("accept connection errror", q); 
+        }
+        if(firstConnect == false) {
+            pthread_mutex_unlock(&mutex);
+            firstConnect = true;
+        }
+        if(tcp_server_receive_request(&c, receive)) {
+            fputs("receive request errror", q);
+        }
+        for(int i = 0; i < 25; i++) {
+            for(int j = 0; j < 9; j++) {
+                if(matrix_g[i][j] == TRUE){
+                    send[(i*9)+j] = '1';
+                } else {
+                    send[(i*9)+j] = '0';
+                }
+            }
+        }  
+        if(currentTetrimo.current_xy[0].x != 0) {
+            for(int i = 0; i < 4; i++) {
+                send[(currentTetrimo.current_xy[i].y*9)+matrixtoblock(currentTetrimo.current_xy[i].x)] = '1';
+            }
         }
         send[225]= '\0';
-
-        fputs("finsih", q);
+        if(tcp_server_send_response(&c, send)) {
+            fputs("send error", q);
+        }
+        pthread_mutex_lock(&mutex);
         drawSecondPlayer(receive);
+        pthread_mutex_unlock(&mutex);
         fclose(q);
     }
     
@@ -721,7 +719,7 @@ void drawTitle(bool isSave) {
         mvprintw(19, 26, "OPTIONS");
         mvprintw(21, 26, "CONTROLS");
     } else {
-        mvprintw(15, 23, "LOCAL 2 PLAYER");
+        mvprintw(15, 26, "2-PLAYER");
         mvprintw(17, 26, "OPTIONS");
         mvprintw(19, 26, "CONTROLS");
     }
@@ -750,7 +748,7 @@ int hostOrClient() {
     mvprintw(13, ARROW_X, "->");
     mvprintw(13, 26, "HOST");
     mvprintw(15, 26, "JOIN");
-
+    mvprintw(17, 22, "(ESC to go back)");
     int option = 0;
     bool select_flg = false;
     int arrow_pos = 13;
@@ -774,11 +772,165 @@ int hostOrClient() {
                 break;
             case '\n':
                 select_flg = TRUE;
+                break;
+            case ESC_KEY:
+                option = 2;
             default:
                 break;
         }
     }
+    clear();
     return option;
+}
+
+int getPort() {
+    int port = 8085;
+    mvprintw(13, 26,  "Port: 8085");
+    bool options_flg = false;
+    while(!options_flg) {
+        switch (wgetch(stdscr))
+        {
+        case KEY_LEFT:
+            if(port != 0) {
+                port--;
+                mvprintw(13, 26, "Port: %d", port);
+            }
+            break;
+        case KEY_RIGHT:
+            if(port != 65535) {
+                port++;
+                mvprintw(13, 26, "Port: %d", port);
+            }
+            break;
+        case '\n':
+            options_flg = 1;
+            break;
+        default:
+            break;
+        }
+    }
+    return port;
+}
+
+void getIpAddr(char *ip) {
+    mvprintw(13, 26, "ENTER HOST IP ADDRESS:");
+    char ip_str[20] = "0.0.0.0";
+    mvprintw(15, 26, ip_str);
+    int arrow_pos = 26;
+    mvprintw(16, arrow_pos, "^");
+    int option = 0;
+    int addr0 = 0;
+    int addr1 = 0;
+    int addr2 = 0;
+    int addr3 = 0;
+    bool select_flg = false;
+    while(!select_flg) {
+        switch(wgetch(stdscr)) {
+            case KEY_LEFT:
+                if(option != 0) {
+                    option--;
+                    mvprintw(16, arrow_pos, "  ");
+                    arrow_pos -= 2;
+                    mvprintw(16, arrow_pos, "^");
+                }
+                break;
+            case KEY_RIGHT:
+                if(option != 3) {
+                    option++;
+                    mvprintw(16, arrow_pos, "  ");
+                    arrow_pos += 2;
+                    mvprintw(16, arrow_pos, "^");
+                }
+                break;
+            case KEY_UP:
+                if(option == 0) {
+                    if(addr0 != 255) {
+                        addr0++;
+                        if(addr0 == 10 || addr0 == 100) {
+                            mvprintw(16, arrow_pos, "  ");
+                            arrow_pos++;
+                            mvprintw(16, arrow_pos, "^");
+                        }
+                    }
+                } else if(option == 1) {
+                    if(addr1 != 255) {
+                        addr1++;
+                        if(addr1 == 10 || addr1 == 100) {
+                            mvprintw(16, arrow_pos, "  ");
+                            arrow_pos++;
+                            mvprintw(16, arrow_pos, "^");
+                        }
+                    }
+                } else if(option == 2) {
+                    if(addr2 != 255) {
+                        addr2++;
+                        if(addr2 == 10 || addr2 == 100) {
+                            mvprintw(16, arrow_pos, "  ");
+                            arrow_pos++;
+                            mvprintw(16, arrow_pos, "^");
+                        }
+                    }
+                } else {
+                    if(addr3 != 255) {
+                        addr3++;
+                        if(addr3 == 10 || addr3 == 100) {
+                            mvprintw(16, arrow_pos, "  ");
+                            arrow_pos++;
+                            mvprintw(16, arrow_pos, "^");
+                        }
+                    }
+                }
+                break;
+            case KEY_DOWN:
+                if(option == 0) {
+                    if(addr0 != 0) {
+                        addr0--;
+                        if(addr0 == 9 || addr0 == 99) {
+                            mvprintw(16, arrow_pos, "  ");
+                            arrow_pos--;
+                            mvprintw(16, arrow_pos, "^");
+                        }
+                    }
+                } else if(option == 1) {
+                    if(addr1 != 0) {
+                        addr1--;
+                        if(addr1 == 9 || addr1 == 99) {
+                            mvprintw(16, arrow_pos, "  ");
+                            arrow_pos--;
+                            mvprintw(16, arrow_pos, "^");
+                        }
+                    }
+                } else if(option == 2) {
+                    if(addr2 != 0) {
+                        addr2--;
+                        if(addr2 == 9 || addr2 == 99) {
+                            mvprintw(16, arrow_pos, "  ");
+                            arrow_pos--;
+                            mvprintw(16, arrow_pos, "^");
+                        }
+                    }
+                } else {
+                    if(addr3 != 0) {
+                        addr3--;
+                        if(addr3 == 9 || addr3 == 99) {
+                            mvprintw(16, arrow_pos, "  ");
+                            arrow_pos--;
+                            mvprintw(16, arrow_pos, "^");
+                        }
+                    }
+                }
+                break;
+            case '\n':
+                select_flg = TRUE;
+                break;
+            default:
+                break;  
+        }
+        sprintf(ip_str, "%d.%d.%d.%d", addr0, addr1, addr2, addr3);
+        mvprintw(15,26, "                       ");
+        mvprintw(15, 26, ip_str);
+    }
+    strcpy(ip, ip_str);
 }
 
 tetrimo newBlock(Color c, Color *next_tetrimo, int offset) {
@@ -1012,7 +1164,7 @@ void initMatrix(bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH]) {
 
 void save(bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH], Color current_color, int delay, int speedcnt, int level, int score, Color next_tetrimo, bool heldExists, bool heldLast, Color held_tetrimo) {
     FILE *savefp;
-    savefp = fopen("save.txt", "w+");
+    savefp = fopen("savefiles/save.txt", "w+");
     for(int i = 0; i < 25; i++) {
         for(int j = 0; j < 9; j++) {
             if(matrix[i][j] == TRUE){
@@ -1042,10 +1194,11 @@ void save(bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH], Color current_color, int d
 
 void load(bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH], Color *current_color, int *delay, int *speedcnt, int *level, int *score, Color *next_tetrimo, bool *heldExists, bool *heldLast, Color *held_tetrimo) {
     FILE *loadfp;
-    if(!(loadfp = fopen("save.txt", "r+"))) {
+    if(!(loadfp = fopen("savefiles/save.txt", "r+"))) {
         FILE *err;
-        fopen("err.txt", "w+");
+        fopen("data/err.txt", "w+");
         fputs("Unable to open file save.txt", err);
+        fclose(err);
         return;
     }
     char m[9];
