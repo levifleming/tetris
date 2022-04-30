@@ -25,7 +25,7 @@ typedef struct server_info {
     char send[30];
 } server_info;
 
-int tcp_server_create(SOCKET *ListenSocket, int *port);
+int tcp_server_create(SOCKET *ListenSocket, char *port);
 
 int tcp_server_accept_connection(SOCKET *ListenSocket, SOCKET *ClientSocket);
 

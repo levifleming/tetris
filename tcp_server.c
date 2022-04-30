@@ -1,6 +1,6 @@
 #include "tcp_server.h"
 
-int tcp_server_create(SOCKET *ListenSocket, int *port) {
+int tcp_server_create(SOCKET *ListenSocket, char *port) {
     WSADATA wsaData;
     int iResult;
     // Initialize Winsock
@@ -18,10 +18,10 @@ int tcp_server_create(SOCKET *ListenSocket, int *port) {
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = IPPROTO_TCP;
     hints.ai_flags = AI_PASSIVE;
-    char p[7];
-    sprintf(p, "%d", *port);
+    // char p[7];
+    // sprintf(p, "%d", *port);
     // Resolve the local address and port to be used by the server
-    iResult = getaddrinfo(NULL, p, &hints, &result);
+    iResult = getaddrinfo(NULL, port, &hints, &result);
     if (iResult != 0) {
         // fputs("getaddrinfo failed\n", fp);
         WSACleanup();
