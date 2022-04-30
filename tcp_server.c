@@ -14,7 +14,7 @@ int tcp_server_create(SOCKET *ListenSocket, char *port) {
     struct addrinfo *result = NULL, *ptr = NULL, hints;
 
     ZeroMemory(&hints, sizeof (hints));
-    hints.ai_family = AF_UNSPEC;
+    hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = IPPROTO_TCP;
     hints.ai_flags = AI_PASSIVE;

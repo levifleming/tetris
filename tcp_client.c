@@ -28,7 +28,7 @@ int tcp_client_connect(Config config, SOCKET *ConnectSocket) {
     // log_info("Connecting to %s:%s\r", config.host, config.port);
     //memset(&hints, 0, sizeof(hints));
     ZeroMemory(&hints, sizeof(hints));
-    hints.ai_family = AF_UNSPEC;
+    hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = IPPROTO_TCP;
     hints.ai_flags = AI_PASSIVE;
