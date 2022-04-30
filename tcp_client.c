@@ -28,12 +28,12 @@ int tcp_client_connect(Config config, SOCKET *ConnectSocket) {
     // log_info("Connecting to %s:%s\r", config.host, config.port);
     //memset(&hints, 0, sizeof(hints));
     ZeroMemory(&hints, sizeof(hints));
-    hints.ai_family = AF_UNSPEC;
+    hints.ai_family = AF_INET6;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = IPPROTO_TCP;
     hints.ai_flags = AI_PASSIVE;
 
-    if (iResult = getaddrinfo(config.host, config.port, &hints, &res) != 0) {
+    if (iResult = getaddrinfo("2601:283:4302:34f0::6b6c", config.port, &hints, &res) != 0) {
         // fputs("Couldn't get address info\r", fp);
         WSACleanup();
         // fclose(fp);
