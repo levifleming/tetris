@@ -30,8 +30,8 @@ int tcp_client_connect(Config config, SOCKET *ConnectSocket) {
     ZeroMemory(&hints, sizeof(hints));
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
-    // hints.ai_protocol = IPPROTO_TCP;
-    // hints.ai_flags = AI_PASSIVE;
+    hints.ai_protocol = IPPROTO_TCP;
+    hints.ai_flags = AI_PASSIVE;
 
     if (iResult = getaddrinfo(config.host, config.port, &hints, &res) != 0) {
         // fputs("Couldn't get address info\r", fp);
