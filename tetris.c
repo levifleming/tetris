@@ -128,8 +128,8 @@ void erasePurple(Display d, int offset);
 void drawOrange(Display d, int offset);
 void eraseOrange(Display d, int offset);
 bool shift(Orientation o, tetrimo *t, bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH]);
-void updateScoreLevel(int *score, int *level, int *speedcnt, int *delay);
-bool update(Orientation o, tetrimo *t, bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH], bool *gameOver);
+void updateScoreLevel(int mult, int *score, int *level, int *speedcnt, int *delay);
+bool update(Orientation o, tetrimo *t, bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH]);
 void toggleRed(struct tetrimo *t, bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH]);
 void toggleGreen(struct tetrimo *t, bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH]);
 void toggleCyan(struct tetrimo *t, bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH]);
@@ -140,7 +140,7 @@ void toggleOrange(struct tetrimo *t, bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH])
 void eraseNext(Color c, int offset);
 void drawNext(Color c, int offset);
 tetrimo newBlock(Color c, Color *next_tetrimo, int offset);
-bool checkLine();
+int checkLine(bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH]);
 void save(bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH], Color current_color, int delay, int speedcnt, int level, int score, Color next_tetrimo, bool heldExists, bool heldLast, Color held_tetrimo);
 void load(bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH], Color *current_color, int *delay, int *speedcnt, int *level, int *score, Color *next_tetrimo, bool *heldExists, bool *heldLast, Color *held_tetrimo);
 void drawHeld(Color c, int offset);
@@ -148,14 +148,13 @@ void eraseHeld(Color c, int offset);
 void drawTitle(bool isSave);
 void drawOptions(int level);
 void drawControls();
-void drawScoreLevel(int offset);
+void drawScoreLevel(int score, int level, int offset);
 void drawGameOver();
 bool checkDown(tetrimo t, bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH]);
 void updateMatrix(tetrimo t, bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH]);
 void *play(void *id);
 void *server(void *port);
 void *client(void *con);
-void getIpAddr(char *ip);
 void getIpAddr2(char *ip);
 void getPort(char *port);
 int hostOrClient();
@@ -180,8 +179,6 @@ bool matrix_g[MATRIX_LENGTH-1][MATRIX_WIDTH];
 
 int main(int argc, char *argv[]) {
     // err = fopen("err.txt", "w+");
-    time_t t;
-    srand((unsigned) time(&t));
 
     initscr();
     noecho();
@@ -261,11 +258,17 @@ int main(int argc, char *argv[]) {
                 clear();
                 game = 0;
                 play((void *)&game);
+                clear();
+                drawGameOver();
+                while(wgetch(stdscr) != ESC_KEY) {}
                 break;
             case 1:
                 clear();
                 game = 1;
                 play((void *)&game);
+                clear();
+                drawGameOver();
+                while(wgetch(stdscr) != ESC_KEY) {}
                 break;
             case 2:
                 clear();
@@ -296,10 +299,16 @@ int main(int argc, char *argv[]) {
                     char host[40];
                     getIpAddr2(host);
                     con.host = host;
+                    if(host == NULL) {
+                        break;
+                    }
                     clear();
                     //con.host = "10.0.0.2";
                     char port[6];
                     getPort(port);
+                    if(port == NULL) {
+                        break;
+                    }
                     con.port = port;
                     fputs(con.host, fp);
                     fputs(con.port, fp);
@@ -309,22 +318,32 @@ int main(int argc, char *argv[]) {
                     pthread_t play_id;
                     pthread_create(&client_id, NULL, client, (void *)&con);
                     pthread_create(&play_id, NULL, play, (void *)&game);
-                    // pthread_join(server_id, NULL);
                     pthread_join(play_id, NULL);
+                    gameOver = true;
+                    pthread_join(client_id, NULL);
+                    clear();
+                    drawGameOver();
+                    while(wgetch(stdscr) != ESC_KEY) {}
                     //play((void *)&game);
                 } else if(isClient == 0) {
                     game = 3;
                     clear();
                     char port[6];
                     getPort(port);
-                    
+                    if(port == NULL) {
+                        break;
+                    }
                     clear();
                     pthread_t server_id;
                     pthread_t play_id;
                     pthread_create(&server_id, NULL, server, (void *)port);
                     pthread_create(&play_id, NULL, play, (void *)&game);
-                    // pthread_join(server_id, NULL);
                     pthread_join(play_id, NULL);
+                    gameOver = true;
+                    pthread_join(server_id, NULL);
+                    clear();
+                    drawGameOver();
+                    while(wgetch(stdscr) != ESC_KEY) {}
                     // tcp_server_close(csock, lsock);
                 } else {
                     break;
@@ -358,7 +377,7 @@ int main(int argc, char *argv[]) {
                     }
                 }
                 while(level != new_level) {
-                    updateScoreLevel(&score, &level, &speedcnt, &delay);
+                    updateScoreLevel(1, &score, &level, &speedcnt, &delay);
                 }
                 score = 0;
                 speedcnt = 0;
@@ -380,8 +399,8 @@ int main(int argc, char *argv[]) {
             default:
                 break;
         }
-        
-        
+        clear();
+        gameOver = false;
         title_flg = 0;
         option = 0;
     }
@@ -403,15 +422,14 @@ void *play(void *id) {
     bool pause_flg = false;
     bool toggle_flg = false;
     bool block_flg = false;
-
-    bool gameOver = false;
     
     bool heldExists = false;
     bool heldLast = false;
     
     // drawScoreLevel(0);
     initMatrix(matrix_g);
-    
+    time_t ti;
+    srand((unsigned) time(&ti));
     Color next_tetrimo = rand()%7;
     Color c = RANDOM;
     
@@ -486,10 +504,12 @@ void *play(void *id) {
                 cnt = 0;
                 //idle_cnt++;
                 pthread_mutex_lock(&mutex);
-                update(movement, &t, matrix_g, &gameOver);
+                update(movement, &t, matrix_g);
                 pthread_mutex_unlock(&mutex);
             }
+            pthread_mutex_lock(&mutex);
             t.toggle(&t, matrix_g);
+            pthread_mutex_unlock(&mutex);
             toggle_flg = true;
             break;
         case KEY_RIGHT:
@@ -497,7 +517,7 @@ void *play(void *id) {
                 cnt = 0;
                 //idle_cnt++;
                 pthread_mutex_lock(&mutex);
-                update(movement, &t, matrix_g, &gameOver);
+                update(movement, &t, matrix_g);
                 pthread_mutex_unlock(&mutex);
             }
             // next_x = current_x + 3;
@@ -508,7 +528,7 @@ void *play(void *id) {
                 cnt = 0;
                 //idle_cnt++;
                 pthread_mutex_lock(&mutex);
-                update(movement, &t, matrix_g, &gameOver);
+                update(movement, &t, matrix_g);
                 pthread_mutex_unlock(&mutex);
             }
             movement = LEFT;
@@ -551,8 +571,12 @@ void *play(void *id) {
             level = 1;
             heldExists = FALSE;
             heldLast = FALSE;
+            pthread_mutex_lock(&mutex);
             gameOver = true;
-            clear();
+            pthread_mutex_unlock(&mutex);
+            // pthread_mutex_lock(&mutex);
+            // clear();
+            // pthread_mutex_unlock(&mutex);
             // fclose(err);
             // if(game == 2) {
             //     tcp_client_close(csock);
@@ -568,7 +592,7 @@ void *play(void *id) {
         idle_cnt++;
         if(!toggle_flg){
             pthread_mutex_lock(&mutex);
-            if(!update(movement, &t, matrix_g, &gameOver)) {
+            if(!update(movement, &t, matrix_g)) {
                 updateMatrix(t, matrix_g);
                 t = newBlock(RANDOM, &next_tetrimo, 0);
                 heldLast = false;
@@ -580,10 +604,13 @@ void *play(void *id) {
             // FILE *err;
             // err = fopen("err.log", "w+");
             // fputs("gamover", err);
-            drawGameOver();
-            gameOver = FALSE;
-            while(wgetch(stdscr) != ESC_KEY) {}
-            clear();
+            // pthread_mutex_lock(&mutex);
+            // clear();
+            // drawGameOver();
+            // pthread_mutex_unlock(&mutex);
+            // gameOver = FALSE;
+            // while(wgetch(stdscr) != ESC_KEY) {}
+            // clear();
             return 0;
         }
         toggle_flg = false;
@@ -591,9 +618,12 @@ void *play(void *id) {
         // mvprintw(2, 0, "%d, %d", next_x, next_y);
         // mvprintw(4, 0, "%d", current_orientation);
         // mvprintw(6, 0, "%d", next_orientation);
-        if(checkLine(matrix_g)) {
+        pthread_mutex_lock(&mutex);
+        int endLine = checkLine(matrix_g);
+        pthread_mutex_unlock(&mutex);
+        if(endLine) {
             pthread_mutex_lock(&mutex);
-            updateScoreLevel(&score, &level, &speedcnt, &delay);
+            updateScoreLevel(endLine, &score, &level, &speedcnt, &delay);
             pthread_mutex_unlock(&mutex);
         }
     }
@@ -603,11 +633,11 @@ void *play(void *id) {
 
 void *client(void *con) {
     SOCKET c;
-    char receive[227];
-    char send[227];
+    char receive[234];
+    char send[234];
     Config *conf = (Config *)con;
     Config config = *conf;
-    while(!gameOver) {
+    while(1) {
         FILE *s;
         s = fopen("data/client_err.txt", "w+");
         
@@ -621,16 +651,28 @@ void *client(void *con) {
             }
         }
         
-        
         if(currentTetrimo.current_xy[0].x != 0) {
             for(int i = 0; i < 4; i++) {
                 send[(currentTetrimo.current_xy[i].y*9)+matrixtoblock(currentTetrimo.current_xy[i].x)] = '1';
             }
         }
+        char lev[3];
+        sprintf(lev, "%02d", level);
+        send[225] = lev[0];
+        send[226] = lev[1];
+        char sc[6];
+        sprintf(sc, "%5d", score);
+        send[227] = sc[0];
+        send[228] = sc[1];
+        send[229] = sc[2];
+        send[230] = sc[3];
+        send[231] = sc[4];
+        char o = '0';
         if(gameOver) {
-
+            o = '1';
         }
-        send[225] = '\0';
+        send[232] = o;
+        send[233]= '\0';
         if(tcp_client_connect(config, &c)) {
             fputs("connect error", s);
         }        
@@ -643,10 +685,18 @@ void *client(void *con) {
         }
         fclose(s);
         tcp_client_close(c);
-        
+        if(receive[232] == '1') {
+            pthread_mutex_lock(&mutex);
+            gameOver = true;
+            pthread_mutex_unlock(&mutex);
+            break;
+        }
         pthread_mutex_lock(&mutex);
         drawSecondPlayer(receive);
         pthread_mutex_unlock(&mutex);
+        if(gameOver) {
+            break;
+        }
     }
 }
 
@@ -654,11 +704,11 @@ void *server(void *port) {
     char *p = (char *)port;
     SOCKET l;
     SOCKET c;
-    char receive[226];
-    char send[226];
+    char receive[234];
+    char send[234];
     bool firstConnect = false;
     tcp_server_create(&l, p);
-    while(!gameOver) {
+    while(1) {
         FILE *q;
         q = fopen("data/server_err.txt", "w+");
         if(firstConnect == false) {
@@ -688,7 +738,29 @@ void *server(void *port) {
                 send[(currentTetrimo.current_xy[i].y*9)+matrixtoblock(currentTetrimo.current_xy[i].x)] = '1';
             }
         }
-        send[225]= '\0';
+        char lev[3];
+        sprintf(lev, "%02d", level);
+        send[225] = lev[0];
+        send[226] = lev[1];
+        char sc[6];
+        sprintf(sc, "%5d", score);
+        send[227] = sc[0];
+        send[228] = sc[1];
+        send[229] = sc[2];
+        send[230] = sc[3];
+        send[231] = sc[4];
+        char o = '0';
+        if(gameOver) {
+            o = '1';
+        }
+        send[232] = o;
+        send[233]= '\0';
+        if(receive[232] == '1') {
+            pthread_mutex_lock(&mutex);
+            gameOver = true;
+            pthread_mutex_unlock(&mutex);
+            break;
+        }
         if(tcp_server_send_response(&c, send)) {
             fputs("send error", q);
         }
@@ -696,6 +768,9 @@ void *server(void *port) {
         drawSecondPlayer(receive);
         pthread_mutex_unlock(&mutex);
         fclose(q);
+        if(gameOver) {
+            break;
+        }
     }
     
     tcp_server_close(c, l);
@@ -711,6 +786,28 @@ void drawSecondPlayer(char *second) {
             }
         }
     }
+    // char lev[3];
+    // lev[0] = second[225];
+    // lev[1] = second[226];
+    // lev[2] = '\0';
+    // int l = atoi(lev);
+    mvprintw(27,21+55, "     ");
+    mvprintw(27,16+55,"Level:    %c%c", second[225], second[226]);
+    if(second[227] == '0') {
+        if(second[228] == '0') {
+            if(second[229] == '0') {
+                return;
+            }
+            mvprintw(26,21+55, "     ");
+            mvprintw(26,16+55,"Score: %c%c%c", second[229], second[230], second[231]);
+            return;
+        }
+        mvprintw(26,21+55, "     ");
+        mvprintw(26,16+55,"Score: %c%c%c%c", second[228], second[229], second[230], second[231]);
+        return;
+    }
+    mvprintw(26,21+55, "     ");
+    mvprintw(26,16+55,"Score: %c%c%c%c%c", second[227], second[228], second[229], second[230], second[231]);
 }
 
 void drawTitle(bool isSave) {
@@ -810,7 +907,11 @@ void getPort(char *port) {
             select_flg = true;
             
         } else if(c == '\b') {
-            pos--;
+            if(pos != 0) {
+                pos--;
+            }
+        } else if( c == ESC_KEY) {
+            return;
         }
         port_str[pos] = '\0';
         mvprintw(15, 26, "         ");
@@ -839,131 +940,14 @@ void getIpAddr2(char *ip) {
             select_flg = true;
             
         } else if(c == '\b') {
-            pos--;
+            if(pos != 0) {
+                pos--;
+            }
+        } else if( c == ESC_KEY) {
+            return;
         }
         ip_str[pos] = '\0';
         mvprintw(15, 26, "                                  ");
-        mvprintw(15, 26, ip_str);
-    }
-    strcpy(ip, ip_str);
-}
-
-void getIpAddr(char *ip) {
-    mvprintw(13, 26, "ENTER HOST IP ADDRESS:");
-    char ip_str[20] = "0.0.0.0";
-    mvprintw(15, 26, ip_str);
-    int arrow_pos = 26;
-    mvprintw(16, arrow_pos, "^");
-    int option = 0;
-    int addr0 = 0;
-    int addr1 = 0;
-    int addr2 = 0;
-    int addr3 = 0;
-    bool select_flg = false;
-    while(!select_flg) {
-        switch(wgetch(stdscr)) {
-            case KEY_LEFT:
-                if(option != 0) {
-                    option--;
-                    mvprintw(16, arrow_pos, "  ");
-                    arrow_pos -= 2;
-                    mvprintw(16, arrow_pos, "^");
-                }
-                break;
-            case KEY_RIGHT:
-                if(option != 3) {
-                    option++;
-                    mvprintw(16, arrow_pos, "  ");
-                    arrow_pos += 2;
-                    mvprintw(16, arrow_pos, "^");
-                }
-                break;
-            case KEY_UP:
-                if(option == 0) {
-                    if(addr0 != 255) {
-                        addr0++;
-                        if(addr0 == 10 || addr0 == 100) {
-                            mvprintw(16, arrow_pos, "  ");
-                            arrow_pos++;
-                            mvprintw(16, arrow_pos, "^");
-                        }
-                    }
-                } else if(option == 1) {
-                    if(addr1 != 255) {
-                        addr1++;
-                        if(addr1 == 10 || addr1 == 100) {
-                            mvprintw(16, arrow_pos, "  ");
-                            arrow_pos++;
-                            mvprintw(16, arrow_pos, "^");
-                        }
-                    }
-                } else if(option == 2) {
-                    if(addr2 != 255) {
-                        addr2++;
-                        if(addr2 == 10 || addr2 == 100) {
-                            mvprintw(16, arrow_pos, "  ");
-                            arrow_pos++;
-                            mvprintw(16, arrow_pos, "^");
-                        }
-                    }
-                } else {
-                    if(addr3 != 255) {
-                        addr3++;
-                        if(addr3 == 10 || addr3 == 100) {
-                            mvprintw(16, arrow_pos, "  ");
-                            arrow_pos++;
-                            mvprintw(16, arrow_pos, "^");
-                        }
-                    }
-                }
-                break;
-            case KEY_DOWN:
-                if(option == 0) {
-                    if(addr0 != 0) {
-                        addr0--;
-                        if(addr0 == 9 || addr0 == 99) {
-                            mvprintw(16, arrow_pos, "  ");
-                            arrow_pos--;
-                            mvprintw(16, arrow_pos, "^");
-                        }
-                    }
-                } else if(option == 1) {
-                    if(addr1 != 0) {
-                        addr1--;
-                        if(addr1 == 9 || addr1 == 99) {
-                            mvprintw(16, arrow_pos, "  ");
-                            arrow_pos--;
-                            mvprintw(16, arrow_pos, "^");
-                        }
-                    }
-                } else if(option == 2) {
-                    if(addr2 != 0) {
-                        addr2--;
-                        if(addr2 == 9 || addr2 == 99) {
-                            mvprintw(16, arrow_pos, "  ");
-                            arrow_pos--;
-                            mvprintw(16, arrow_pos, "^");
-                        }
-                    }
-                } else {
-                    if(addr3 != 0) {
-                        addr3--;
-                        if(addr3 == 9 || addr3 == 99) {
-                            mvprintw(16, arrow_pos, "  ");
-                            arrow_pos--;
-                            mvprintw(16, arrow_pos, "^");
-                        }
-                    }
-                }
-                break;
-            case '\n':
-                select_flg = TRUE;
-                break;
-            default:
-                break;  
-        }
-        sprintf(ip_str, "%d.%d.%d.%d", addr0, addr1, addr2, addr3);
-        mvprintw(15,26, "                       ");
         mvprintw(15, 26, ip_str);
     }
     strcpy(ip, ip_str);
@@ -1172,21 +1156,23 @@ void drawBoard(int score, int level, int offset) {
         mvprintw(i, 5+offset, MATRIX);
     }
     mvprintw(i, 5+offset, MATRIX_BOTTOM);
-    drawScoreLevel(offset);
-    mvprintw(0,38+offset, "Next:");
-    mvprintw(1,39+offset, "_____________");
-    for(int i = 2; i < 7; i++) {
-        mvprintw(i,38+offset,"|");
-        mvprintw(i,52+offset,"|");
+    drawScoreLevel(score, level, offset);
+    if(!offset) {
+        mvprintw(0,38+offset, "Next:");
+        mvprintw(1,39+offset, "_____________");
+        for(int i = 2; i < 7; i++) {
+            mvprintw(i,38+offset,"|");
+            mvprintw(i,52+offset,"|");
+        }
+        mvprintw(6,39+offset, "_____________");
+        mvprintw(11,39+offset, "_____________");
+        for(int i = 12; i < 17; i++) {
+            mvprintw(i,38+offset,"|");
+            mvprintw(i,52+offset,"|");
+        }
+        mvprintw(16,39+offset, "_____________");
+        mvprintw(10,38+offset, "Hold:");
     }
-    mvprintw(6,39+offset, "_____________");
-    mvprintw(11,39+offset, "_____________");
-    for(int i = 12; i < 17; i++) {
-        mvprintw(i,38+offset,"|");
-        mvprintw(i,52+offset,"|");
-    }
-    mvprintw(16,39+offset, "_____________");
-    mvprintw(10,38+offset, "Hold:");
 }
 
 void initMatrix(bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH]) {
@@ -1673,15 +1659,15 @@ void replaceLines(int first, int last, bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH
     }
 }
 
-void drawScoreLevel(int offset) {
+void drawScoreLevel(int score, int level, int offset) {
     mvprintw(26,21+offset, "     ");
-    mvprintw(26,16+offset,"Score: %d", score);
+    mvprintw(26,16+offset,"Score: %5d", score);
     mvprintw(27,21+offset, "     ");
-    mvprintw(27,16+offset,"Level: %d", level);
+    mvprintw(27,16+offset,"Level:    %02d", level);
 }
-void updateScoreLevel(int *score, int *level, int *speedcnt, int *delay) {
-    (*score) += 100;
-    (*speedcnt) += 100;
+void updateScoreLevel(int mult, int *score, int *level, int *speedcnt, int *delay) {
+    (*score) += (100 * mult);
+    (*speedcnt) += (100 * mult);
     if((*speedcnt) >= 1000) {
         if((*delay) <= 100) {
             (*delay) -= 10;
@@ -1692,13 +1678,14 @@ void updateScoreLevel(int *score, int *level, int *speedcnt, int *delay) {
         (*speedcnt) = 0;
         (*level)++;
     }
-    drawScoreLevel(0);
+    drawScoreLevel(*score, *level, 0);
 }
 
-bool checkLine(bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH]) {
+int checkLine(bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH]) {
     int first = 0;
     int last = 0;
-    bool cleared = false;
+    // bool cleared = false;
+    int numLines = 0;
     
     //problem here
     // for(int i = 24; i >= 0; i--) {
@@ -1714,7 +1701,6 @@ bool checkLine(bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH]) {
                 break;
             }
             if(j == 8) {
-                cleared = true;
                 last = i;
                 if(first == 0) {
                     first = i;
@@ -1724,9 +1710,10 @@ bool checkLine(bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH]) {
     }
 
     if(first != 0 && last != 0) {
+        numLines = first - last + 1;
         replaceLines(first, last, matrix);
     }
-    return cleared;
+    return numLines;
 }
 
 // returns true if checkDown is true
@@ -1789,14 +1776,14 @@ void drawGameOver() {
 }
 
 // returns false if checkDown
-bool update(Orientation o, tetrimo *t, bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH], bool *gameOver) {
+bool update(Orientation o, tetrimo *t, bool matrix[MATRIX_LENGTH-1][MATRIX_WIDTH]) {
     // if checkDown
     if(shift(o, t, matrix)) {
         for(int i = 0; i < 4; i++) {
             (*t).next_xy[i].x = (*t).current_xy[i].x;
             (*t).next_xy[i].y = (*t).current_xy[i].y;
             if((*t).current_xy[i].y==0) {
-                (*gameOver) = TRUE;
+                (gameOver) = TRUE;
             }
         }
         return false;

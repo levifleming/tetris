@@ -85,7 +85,7 @@ int tcp_server_accept_connection(SOCKET *ListenSocket, SOCKET *ClientSocket) {
 }
 
 int tcp_server_receive_request(SOCKET *ClientSocket, char *message) {
-    int recvbuflen = 226;
+    int recvbuflen = 234;
     int iResult;
     // FILE *fp;
 

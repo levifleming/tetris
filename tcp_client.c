@@ -164,7 +164,7 @@ int tcp_client_receive_response(SOCKET *ConnectSocket, char *message) {
     FILE *fp;
     fp = fopen("data/client.txt", "w+");
     
-    int recvbuflen = 226;
+    int recvbuflen = 234;
     int iResult;
     char c[80];
     iResult = recv((*ConnectSocket), message, recvbuflen, 0);
