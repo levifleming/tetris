@@ -173,6 +173,7 @@ int speedcnt;
 int delay;
 
 tetrimo currentTetrimo;
+unsigned int seed;
 
 bool matrix_g[MATRIX_LENGTH-1][MATRIX_WIDTH];
 
@@ -253,7 +254,8 @@ int main(int argc, char *argv[]) {
         refresh();
 
         time_t ti;
-        srand((unsigned) time(&ti));
+        srand((unsigned)time(&ti));
+        
         int player;
         int game;
         switch(option) {
@@ -296,6 +298,7 @@ int main(int argc, char *argv[]) {
                         break;
                     }
                     con.port = port;
+                    srand((unsigned) atoi(port));
                     fputs(con.host, fp);
                     fputs(con.port, fp);
                     fclose(fp);
@@ -318,6 +321,7 @@ int main(int argc, char *argv[]) {
                     if(port == NULL) {
                         break;
                     }
+                    srand((unsigned) atoi(port));
                     clear();
                     pthread_t server_id;
                     pthread_t play_id;
@@ -549,9 +553,6 @@ void *client(void *con) {
     char send[234];
     Config *conf = (Config *)con;
     Config config = *conf;
-    pthread_mutex_lock(&mutex);
-    srand((unsigned)atoi(config.port));
-    pthread_mutex_unlock(&mutex);
     bool over = false;
     FILE *s;
     s = fopen("data/client_err.txt", "w+");
@@ -616,9 +617,6 @@ void *client(void *con) {
 
 void *server(void *port) {
     char *p = (char *)port;
-    pthread_mutex_lock(&mutex);
-    srand((unsigned)atoi(p));
-    pthread_mutex_unlock(&mutex);
     SOCKET l;
     SOCKET c;
     char receive[234];
